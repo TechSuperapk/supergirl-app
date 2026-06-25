@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuth() { return request.auth != null; }
+    function isOwner(uid) { return request.auth.uid == uid; }
+    match /profiles/{uid}/{f}     { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+    match /club/posts/{uid}/{f}   { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 52428800; }
+    match /club/events/{uid}/{f}  { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+    match /club/groups/{uid}/{f}  { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+    match /fits/{uid}/wardrobe/{f}{ allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+    match /boards/{uid}/{f}       { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+    match /journal/{uid}/{f}      { allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 52428800; }
+    match /journal_media/{uid}/{allPaths=**} { allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 104857600; }
+    match /journal-images/{uid}/{allPaths=**} { allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 26214400; }
+    match /journal-videos/{uid}/{allPaths=**} { allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 209715200; }
+    match /journal-audio/{uid}/{allPaths=**}  { allow read: if isAuth() && isOwner(uid); allow write: if isAuth() && isOwner(uid) && request.resource.size < 52428800; }
+    match /profile-images/{uid}/{allPaths=**} { allow read: if isAuth(); allow write: if isAuth() && isOwner(uid) && request.resource.size < 10485760; }
+  }
+}

@@ -1,0 +1,115 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+
+import { HomeScreen }     from '../modules/journaling/screens/HomeScreen';
+import { CalendarScreen } from '../modules/journaling/screens/CalendarScreen';
+import { SearchScreen }   from '../modules/journaling/screens/SearchScreen';
+import { PrivateNavigator } from './PrivateNavigator';
+import {
+  TabHomeIcon, TabCalendarIcon, TabSearchIcon, TabLockIcon, TabPlusIcon,
+} from '../shared/components/ModuleIcons';
+
+export type JournalTabParamList = {
+  Home:     undefined;
+  Calendar: undefined;
+  Search:   undefined;
+  Private:  undefined;
+};
+
+const BLUE = '#2979FF';
+const GREY = '#9AA0A6';
+const F  = 'DMSans-Regular';
+const FB = 'DMSans-Bold';
+
+const TABS = [
+  { name: 'Home',     label: 'Home',     Icon: TabHomeIcon },
+  { name: 'Calendar', label: 'Calendar', Icon: TabCalendarIcon },
+  { name: 'Search',   label: 'Search',   Icon: TabSearchIcon },
+  { name: 'Private',  label: 'Private',  Icon: TabLockIcon },
+] as const;
+
+function JournalTabBar({ state, navigation }: BottomTabBarProps) {
+  const onAdd = () => {
+    const parent = navigation.getParent();
+    if (parent) parent.navigate('WriteEntry' as never, {} as never);
+  };
+  // split tabs so the FAB sits in the middle (2 left, 2 right)
+  const left  = TABS.slice(0, 2);
+  const right = TABS.slice(2);
+
+  const renderTab = (t: typeof TABS[number]) => {
+    const index   = TABS.findIndex(x => x.name === t.name);
+    const focused = state.index === index;
+    return (
+      <TouchableOpacity
+        key={t.name}
+        style={tb.tab}
+        activeOpacity={0.75}
+        onPress={() => {
+          const ev = navigation.emit({ type: 'tabPress', target: state.routes[index].key, canPreventDefault: true });
+          if (!focused && !ev.defaultPrevented) navigation.navigate(t.name as never);
+        }}
+      >
+        <t.Icon size={24} />
+        <Text style={[tb.label, { color: focused ? BLUE : GREY, fontFamily: focused ? FB : F }]}>
+          {t.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={tb.container}>
+      {left.map(renderTab)}
+      <View style={tb.fabSlot}>
+        <TouchableOpacity style={tb.fab} activeOpacity={0.85} onPress={onAdd}>
+          <TabPlusIcon size={28} />
+        </TouchableOpacity>
+      </View>
+      {right.map(renderTab)}
+    </View>
+  );
+}
+
+const Tab = createBottomTabNavigator<JournalTabParamList>();
+
+export function JournalTabNavigator() {
+  return (
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <JournalTabBar {...props} />}
+    >
+      <Tab.Screen name="Home"     component={HomeScreen} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Search"   component={SearchScreen} />
+      <Tab.Screen name="Private"  component={PrivateNavigator} />
+    </Tab.Navigator>
+  );
+}
+
+const TAB_H = Platform.OS === 'ios' ? 84 : 66;
+
+const tb = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    height: TAB_H,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0.5,
+    borderTopColor: '#EFEFEF',
+    paddingBottom: Platform.OS === 'ios' ? 22 : 8,
+    paddingTop: 8,
+    alignItems: 'flex-start',
+  },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 3, paddingTop: 2 },
+  label: { fontSize: 11 },
+  fabSlot: { width: 72, alignItems: 'center' },
+  fab: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: BLUE,
+    alignItems: 'center', justifyContent: 'center', marginTop: -20,
+    shadowColor: BLUE, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 8, elevation: 6,
+  },
+});

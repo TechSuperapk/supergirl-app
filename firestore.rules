@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuth() { return request.auth != null; }
+    function isOwner(uid) { return request.auth.uid == uid; }
+    match /users/{uid} { allow read: if isAuth(); allow create,update: if isAuth() && isOwner(uid); allow delete: if false; }
+    // Per-user backup subcollections: journals, settings, reminders, templates, backups (owner-only).
+    match /users/{uid}/{sub}/{docId} { allow read, write: if isAuth() && isOwner(uid); }
+    match /subscriptions/{uid} { allow read,write: if isAuth() && isOwner(uid); }
+    match /vaults/{uid} { allow read,write: if isAuth() && isOwner(uid); }
+    match /admins/{uid} { allow read: if isAuth() && isOwner(uid); allow write: if false; }
+    match /journal_entries/{id} { allow read,write: if isAuth() && request.auth.uid == resource.data.userId; allow create: if isAuth() && request.auth.uid == request.resource.data.userId; }
+    match /journal_drafts/{id} { allow read,write: if isAuth() && request.auth.uid == resource.data.userId; allow create: if isAuth() && request.auth.uid == request.resource.data.userId; }
+    match /journal_backups/{uid} { allow read,write: if isAuth() && isOwner(uid); }
+    match /club_posts/{id} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.auth.uid == request.resource.data.authorId;
+      allow update: if isAuth() && (request.auth.uid == resource.data.authorId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes','saves','commentCount']));
+      allow delete: if isAuth() && request.auth.uid == resource.data.authorId;
+    }
+    match /club_comments/{id} { allow read: if isAuth(); allow create: if isAuth(); allow update: if isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes','replies']); allow delete: if isAuth() && request.auth.uid == resource.data.authorId; }
+    match /club_events/{id} { allow read: if isAuth(); allow create,update,delete: if isAuth(); }
+    match /club_tickets/{id} { allow read: if isAuth() && request.auth.uid == resource.data.userId; allow create: if isAuth() && request.auth.uid == request.resource.data.userId; allow update: if false; }
+    match /club_groups/{id} { allow read: if isAuth(); allow create: if isAuth(); allow update: if isAuth(); allow delete: if isAuth() && request.auth.uid == resource.data.creatorId; }
+    match /club_group_messages/{id} { allow read: if isAuth(); allow create: if isAuth() && request.auth.uid == request.resource.data.senderId; allow update,delete: if false; }
+    match /fits_wardrobe/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /fits_outfits/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /fits_planner/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_mood/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_sleep/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_habits/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_habit_logs/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_period/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_health/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_expenses/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /trackers_milestones/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /boards/{id} { allow read: if isAuth() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true); allow create: if isAuth() && request.auth.uid == request.resource.data.userId; allow update,delete: if isAuth() && request.auth.uid == resource.data.userId; }
+  }
+}

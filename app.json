@@ -1,0 +1,83 @@
+{
+  "expo": {
+    "name": "Super Girl",
+    "slug": "super-girl",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FDFAF7"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.supergirl.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SuperGirl uses your camera to add photos to your journal, wardrobe, and boards.",
+        "NSPhotoLibraryUsageDescription": "SuperGirl accesses your photos.",
+        "NSMicrophoneUsageDescription": "SuperGirl uses the microphone for voice notes.",
+        "NSFaceIDUsageDescription": "SuperGirl uses Face ID to protect your private vault."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#FDFAF7"
+      },
+      "package": "com.supergirl.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-font",
+      "expo-build-properties",
+      "expo-audio",
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2979FF",
+          "iosDisplayInForeground": true
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow SuperGirl to use Face ID for your private vault."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SuperGirl to access your photos.",
+          "cameraPermission": "Allow SuperGirl to use your camera."
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2031591f-c489-4740-8ff0-0e2efcd053ac"
+      }
+    }
+  }
+}
