@@ -18,17 +18,15 @@ const FM = 'DMSans-Medium';
 const FB = 'DMSans-Bold';
 const BLUE = '#2979FF';
 
-// Real-SMS OTP toggle. Leave false to use the test OTP in Expo Go.
-// To enable real OTP: 1) npx expo install expo-firebase-recaptcha  2) build a
-// dev client (expo run:android / run:ios)  3) enable Phone sign-in in Firebase
-// console, then set USE_REAL_OTP = true.
-const USE_REAL_OTP = true;
+// OTP mode. Test/anonymous flow (works everywhere, no native deps).
+// Real SMS OTP needs @react-native-firebase (native) — expo-firebase-recaptcha
+// is deprecated and does not build on SDK 54, so it has been removed.
+const USE_REAL_OTP = false;
 const OTP_LEN = USE_REAL_OTP ? 6 : 4;
-// Responsive box sizing so 6 digits fit on small screens.
+// Responsive box sizing so the digits fit on small screens.
 const OTP_GAP = 8;
 const OTP_BOX = Math.max(40, Math.min(56, Math.floor((SW - 44 - OTP_GAP * (OTP_LEN - 1)) / OTP_LEN)));
-let RecaptchaModal: any = null;
-try { RecaptchaModal = require('expo-firebase-recaptcha').FirebaseRecaptchaVerifierModal; } catch { /* not installed yet */ }
+const RecaptchaModal: any = null;
 
 const SLIDES = [
   { img: require('../../../../assets/onboarding/circle.png'),   title: 'Your Personality, All in', accent: 'One Place.', sub: 'Add your favorites, hobbies, travel memories, books, movies, music, and circle of friends to create a profile that is uniquely yours.' },
@@ -133,7 +131,7 @@ export function OnboardingScreen({ onDone }: Props) {
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
     if (USE_REAL_OTP) {
       if (!recaptchaRef.current) {
-        Alert.alert('Setup needed', 'Install expo-firebase-recaptcha and run a dev build to enable real OTP.');
+        Alert.alert('Setup needed', 'Real OTP requires a native Firebase build.');
         return;
       }
       setLoading(true);
