@@ -1,6 +1,6 @@
 /**
- * storageUploadService — uploads local media to Firebase Storage and returns
- * download URLs. Only URLs are stored in Firestore.
+ * storageUploadService — uploads local media to Firebase Storage (react-native-
+ * firebase) and returns download URLs. Only URLs are stored in Firestore.
  *
  * Folder layout:
  *   journal-images/{uid}/...
@@ -8,8 +8,7 @@
  *   journal-audio/{uid}/...
  *   profile-images/{uid}/...
  */
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../lib/firebase';
+import { getStorage, ref, putFile, getDownloadURL } from '@react-native-firebase/storage';
 
 type MediaKind = 'images' | 'videos' | 'audio';
 
@@ -32,13 +31,11 @@ export async function uploadMedia(
   uid: string, kind: MediaKind, entryId: string, localUri: string,
 ): Promise<string> {
   if (isRemote(localUri)) return localUri; // already uploaded
-  const res = await fetch(localUri);
-  const blob = await res.blob();
   const fallbackExt = kind === 'images' ? 'jpg' : kind === 'videos' ? 'mp4' : 'm4a';
   const name = `${entryId}_${Date.now()}.${extOf(localUri, fallbackExt)}`;
   const path = `${FOLDER[kind]}/${uid}/${name}`;
-  const r = ref(storage, path);
-  await uploadBytes(r, blob);
+  const r = ref(getStorage(), path);
+  await putFile(r, localUri);
   return getDownloadURL(r);
 }
 
@@ -59,10 +56,8 @@ export async function uploadMany(
 
 export async function uploadProfileImage(uid: string, localUri: string): Promise<string> {
   if (isRemote(localUri)) return localUri;
-  const res = await fetch(localUri);
-  const blob = await res.blob();
   const path = `profile-images/${uid}/avatar_${Date.now()}.${extOf(localUri, 'jpg')}`;
-  const r = ref(storage, path);
-  await uploadBytes(r, blob);
+  const r = ref(getStorage(), path);
+  await putFile(r, localUri);
   return getDownloadURL(r);
 }

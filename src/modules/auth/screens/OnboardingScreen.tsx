@@ -18,10 +18,9 @@ const FM = 'DMSans-Medium';
 const FB = 'DMSans-Bold';
 const BLUE = '#2979FF';
 
-// OTP mode. Test/anonymous flow (works everywhere, no native deps).
-// Real SMS OTP needs @react-native-firebase (native) — expo-firebase-recaptcha
-// is deprecated and does not build on SDK 54, so it has been removed.
-const USE_REAL_OTP = false;
+// Real SMS OTP via react-native-firebase (native phone auth, no reCAPTCHA).
+// Set to false to fall back to the test/anonymous flow.
+const USE_REAL_OTP = true;
 const OTP_LEN = USE_REAL_OTP ? 6 : 4;
 // Responsive box sizing so the digits fit on small screens.
 const OTP_GAP = 8;
@@ -130,13 +129,9 @@ export function OnboardingScreen({ onDone }: Props) {
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
     if (USE_REAL_OTP) {
-      if (!recaptchaRef.current) {
-        Alert.alert('Setup needed', 'Real OTP requires a native Firebase build.');
-        return;
-      }
       setLoading(true);
       try {
-        await fbSendOtp(`${cc}${digits}`, recaptchaRef.current);
+        await fbSendOtp(`${cc}${digits}`);
         setStep('otp'); setResend(29); setOtp('');
         setTimeout(() => otpRefs.current[0]?.focus(), 350);
       } catch (e: any) {

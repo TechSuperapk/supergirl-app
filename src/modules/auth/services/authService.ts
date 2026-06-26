@@ -1,14 +1,18 @@
-import { signInWithPhoneNumber, ApplicationVerifier } from 'firebase/auth';
-import { auth } from '../../../lib/firebase';
+/**
+ * Phone OTP via react-native-firebase — native verification, no reCAPTCHA.
+ */
+import { getAuth, signInWithPhoneNumber } from '@react-native-firebase/auth';
 
-let confirmationResult: any = null;
+let confirmation: any = null;
 
-export async function sendOtp(phone: string, recaptcha: ApplicationVerifier) {
-  confirmationResult = await signInWithPhoneNumber(auth, phone, recaptcha);
+/** Send a real SMS code to the given E.164 phone number. */
+export async function sendOtp(phone: string) {
+  confirmation = await signInWithPhoneNumber(getAuth(), phone);
 }
 
-export async function verifyOtp(otp: string) {
-  if (!confirmationResult) throw new Error('Send OTP first');
-  const result = await confirmationResult.confirm(otp);
+/** Confirm the SMS code; returns the signed-in user on success. */
+export async function verifyOtp(code: string) {
+  if (!confirmation) throw new Error('Send OTP first');
+  const result = await confirmation.confirm(code);
   return result.user;
 }

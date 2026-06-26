@@ -7,7 +7,13 @@ module.exports = function (api) {
         'module-resolver',
         {
           root: ['./src'],
-          alias: { '@': './src' },
+          alias: {
+            '@': './src',
+            // Route the JS-SDK modular imports used across the data layer to
+            // react-native-firebase at build time, so those files stay untouched.
+            'firebase/firestore': '@react-native-firebase/firestore',
+            'firebase/auth': '@react-native-firebase/auth',
+          },
         },
       ],
       'react-native-reanimated/plugin',
