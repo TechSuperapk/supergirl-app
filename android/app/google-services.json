@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "902599286792",
+    "firebase_url": "https://super-bae-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "super-bae",
+    "storage_bucket": "super-bae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:902599286792:android:7fa3155801b3a2a95ff1bd",
+        "android_client_info": {
+          "package_name": "com.supergirl.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApbkS1sUr8V5m7sz6j5n2de_RYoLsaDKs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
