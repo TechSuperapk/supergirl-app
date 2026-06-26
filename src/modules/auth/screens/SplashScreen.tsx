@@ -1,8 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
 import SplashLogo from '../components/SplashLogo';
-
-const FB = 'DMSans-Bold';
 
 interface Props { onDone: () => void; }
 
@@ -21,15 +19,13 @@ export function SplashScreen({ onDone }: Props) {
 
   return (
     <View style={s.wrap}>
-      <Animated.View style={{ opacity: fade, transform: [{ scale }], alignItems: 'center' }}>
-        <SplashLogo width={150} height={143} />
-        <Text style={[s.title, { fontFamily: FB }]}>Super Bae</Text>
+      <Animated.View style={{ opacity: fade, transform: [{ scale }] }}>
+        <SplashLogo width={200} height={191} />
       </Animated.View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap:  { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 28, color: '#2979FF', letterSpacing: 0.5, marginTop: 18 },
+  wrap: { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
 });
