@@ -1,15 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView }   from 'react-native-safe-area-context';
 import { useDispatch }    from 'react-redux';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { loginSuccess }   from '../store/authSlice';
 import { sendOtp, verifyOtp } from '../services/authService';
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
-import firebaseApp from '../../../lib/firebase';
 
 const F  = 'DMSans-Regular';
 const FB = 'DMSans-Bold';
@@ -26,9 +24,6 @@ interface Props { onLogin: () => void; }
 
 export function LoginScreen({ onLogin }: Props) {
   const dispatch = useDispatch();
-  // Invisible reCAPTCHA verifier — mounted once, reused for send + resend.
-  // This is what lets real Firebase Phone Auth work without a native build.
-  const recaptchaRef = useRef<FirebaseRecaptchaVerifierModal>(null);
 
   const [mode,    setMode]    = useState<'login' | 'signup'>('login');
   const [phone,   setPhone]   = useState('');
@@ -51,13 +46,9 @@ export function LoginScreen({ onLogin }: Props) {
       Alert.alert('Name required', 'Enter your name to continue');
       return;
     }
-    if (!recaptchaRef.current) {
-      Alert.alert('Not ready', 'Verification is still loading — try again in a moment.');
-      return;
-    }
     setLoading(true);
     try {
-      await sendOtp(fullPhone, recaptchaRef.current);
+      await sendOtp(fullPhone);
       setStep('otp');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to send OTP. Please try again.');
@@ -169,15 +160,6 @@ export function LoginScreen({ onLogin }: Props) {
   return (
     <KeyboardAvoidingView style={s.safe} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <SafeAreaView style={s.safe}>
-        {/* Invisible reCAPTCHA — required by Firebase Phone Auth in a WebView
-            since there's no native reCAPTCHA in Expo Go. Renders nothing
-            visible unless Google's risk check needs the visible challenge. */}
-        <FirebaseRecaptchaVerifierModal
-          ref={recaptchaRef}
-          firebaseConfig={firebaseApp.options}
-          attemptInvisibleVerification
-        />
-
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
           {/* Logo */}

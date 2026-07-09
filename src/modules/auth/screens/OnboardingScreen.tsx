@@ -10,8 +10,7 @@ import { loginSuccess } from '../store/authSlice';
 import { saveUserToFirestore } from '../services/userService';
 import { sendOtp as fbSendOtp, verifyOtp as fbVerifyOtp } from '../services/authService';
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import app, { auth } from '../../../lib/firebase';
+import { auth } from '../../../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
 
 const { width: SW } = Dimensions.get('window');
@@ -58,7 +57,6 @@ export function OnboardingScreen({ onDone }: Props) {
   const [loading, setLoading] = useState(false);
   const [resend, setResend]   = useState(0);
   const otpRefs = useRef<Array<TextInput | null>>([]);
-  const recaptchaRef = useRef<FirebaseRecaptchaVerifierModal>(null);
 
   const onOtpChange = (text: string, i: number) => {
     const clean = text.replace(/\D/g, '');
@@ -130,13 +128,9 @@ export function OnboardingScreen({ onDone }: Props) {
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
     if (USE_REAL_OTP) {
-      if (!recaptchaRef.current) {
-        Alert.alert('Not ready', 'Verification is still loading — try again in a moment.');
-        return;
-      }
       setLoading(true);
       try {
-        await fbSendOtp(`${cc}${digits}`, recaptchaRef.current);
+        await fbSendOtp(`${cc}${digits}`);
         setStep('otp'); setResend(29); setOtp('');
         setTimeout(() => otpRefs.current[0]?.focus(), 350);
       } catch (e: any) {
@@ -208,9 +202,6 @@ export function OnboardingScreen({ onDone }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {USE_REAL_OTP && (
-        <FirebaseRecaptchaVerifierModal ref={recaptchaRef} firebaseConfig={app.options} attemptInvisibleVerification />
-      )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Carousel — collapses while the keyboard is open */}
         {!kbOpen && (

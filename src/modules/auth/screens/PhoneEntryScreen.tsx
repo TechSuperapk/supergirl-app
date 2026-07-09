@@ -1,24 +1,15 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
-// Stub for FirebaseRecaptchaVerifierModal because expo-firebase-recaptcha is deprecated in Expo SDK 54
-const FirebaseRecaptchaVerifierModal = React.forwardRef<any, any>((props, ref) => {
-  React.useImperativeHandle(ref, () => ({
-    verify: async () => 'mock-token'
-  }));
-  return null;
-});
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/authSlice';
 import { sendOtp, verifyOtp } from '../services/authService';
 import { saveUserToFirestore } from '../services/userService';
-import app from '../../../lib/firebase';
 
 export function PhoneEntryScreen({ onLogin }: { onLogin: () => void }) {
   const dispatch     = useDispatch();
-  const recaptchaRef = useRef<any>(null);
   const [phone, setPhone]     = useState('');
   const [otp, setOtp]         = useState('');
   const [step, setStep]       = useState<'phone' | 'otp'>('phone');
@@ -28,7 +19,7 @@ export function PhoneEntryScreen({ onLogin }: { onLogin: () => void }) {
     if (phone.length < 10) return Alert.alert('Enter a valid 10-digit number');
     setLoading(true);
     try {
-      await sendOtp('+91' + phone, recaptchaRef.current);
+      await sendOtp('+91' + phone);
       setStep('otp');
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -57,11 +48,6 @@ export function PhoneEntryScreen({ onLogin }: { onLogin: () => void }) {
 
   return (
     <View style={s.container}>
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaRef}
-        firebaseConfig={app.options}
-        attemptInvisibleVerification
-      />
       <Text style={s.title}>
         {step === 'phone' ? '📱 Enter your number' : '🔐 Enter OTP'}
       </Text>
