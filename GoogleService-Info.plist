@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCmOuQjsr7jAyNRXleYt8-40t_NtgIUqvw</string>
+	<key>GCM_SENDER_ID</key>
+	<string>902599286792</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.supergirl.app</string>
+	<key>PROJECT_ID</key>
+	<string>super-bae</string>
+	<key>STORAGE_BUCKET</key>
+	<string>super-bae.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:902599286792:ios:7ed2093fc19758a55ff1bd</string>
+	<key>DATABASE_URL</key>
+	<string>https://super-bae-default-rtdb.asia-southeast1.firebasedatabase.app</string>
+</dict>
+</plist>
