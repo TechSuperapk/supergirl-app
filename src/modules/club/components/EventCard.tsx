@@ -34,6 +34,10 @@ export function EventCard({ event, onPress, onTicket }: Props) {
   const isPast = new Date(event.endDate) < new Date();
 
   return (
+    // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
+    // inner TouchableOpacity clips the cover image to its rounded corners.
+    // overflow:'hidden' on the SAME view as a shadow suppresses it on Android.
+    <View style={s.cardShadowWrap}>
     <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.9}>
       {/* Cover image */}
       <View style={s.cover}>
@@ -88,17 +92,24 @@ export function EventCard({ event, onPress, onTicket }: Props) {
         )}
       </View>
     </TouchableOpacity>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  cardShadowWrap: {
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.bgCard,
+    marginHorizontal: Spacing.base,
+    marginBottom: Spacing.md,
+    ...Shadows.md,
+  },
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
-    marginHorizontal: Spacing.base,
-    marginBottom: Spacing.md,
     overflow: 'hidden',
-    ...Shadows.md,
   },
   cover: { height: 160, backgroundColor: Colors.bgInput, justifyContent: 'flex-end' },
   coverPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.club + '20' },

@@ -119,6 +119,11 @@ export function AddClothingScreen({ route, navigation }: Props) {
 
           {/* Image picker */}
           <View style={s.imageSection}>
+            {/* Shadow lives on this outer wrapper (no overflow:'hidden' here) —
+                the inner TouchableOpacity clips the photo to its rounded
+                corners. overflow:'hidden' + a shadow on the same view
+                suppresses the shadow on Android. */}
+            <View style={s.imageTileShadowWrap}>
             <TouchableOpacity style={s.imageTile} onPress={pickImage} activeOpacity={0.85}>
               {displayImage ? (
                 <Image source={{ uri: displayImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -129,6 +134,7 @@ export function AddClothingScreen({ route, navigation }: Props) {
                 </View>
               )}
             </TouchableOpacity>
+            </View>
             <View style={s.imageActions}>
               <AppButton label="Gallery" onPress={pickImage} variant="secondary" size="sm" />
               <AppButton label="Camera"  onPress={takePhoto} variant="ghost"     size="sm" />
@@ -212,11 +218,16 @@ const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.bgApp },
   scroll:  { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
   imageSection: { alignItems: 'center', gap: Spacing.sm },
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  imageTileShadowWrap: {
+    width: 180, height: 180, borderRadius: Radius.lg,
+    ...Shadows.sm,
+  },
   imageTile: {
     width: 180, height: 180, borderRadius: Radius.lg,
     backgroundColor: Colors.bgInput, overflow: 'hidden',
     borderWidth: 1.5, borderColor: Colors.border, borderStyle: 'dashed',
-    ...Shadows.sm,
   },
   imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   imageActions: { flexDirection: 'row', gap: Spacing.sm },

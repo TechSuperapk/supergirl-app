@@ -1,15 +1,15 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JournalNavigator }  from './JournalNavigator';   // existing
-import { FitsNavigator }     from './FitsNavigator';
-import { TrackersNavigator } from './TrackersNavigator';
 import { ProfileNavigator }  from './ProfileNavigator';
+import { UnderDevelopmentScreen } from '../shared/components/UnderDevelopmentScreen';
 
 import { Colors }     from '../shared/theme/colors';
 import { FontFamily, FontSize } from '../shared/theme/typography';
@@ -17,7 +17,7 @@ import { MainTabParamList }  from './types';
 
 // Screens that should hide the main tab bar (full-screen editors, write screens etc.)
 const HIDE_FOR_ROUTES = new Set([
-  'WriteEntry', 'EntryDetail', 'Scribble',
+  'WriteEntry', 'GuidedEntry', 'NoteEditor', 'EntryDetail', 'Scribble',
   'OutfitBuilder', 'BoardEditor', 'AvatarBuilder',
   'GroupChat',
 ]);
@@ -37,11 +37,19 @@ const TAB_ICONS: Record<keyof MainTabParamList, { emoji: string; label: string; 
 
 // ── Custom tab bar ────────────────────────────────────────────────────────────
 function SuperGirlTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  // Real per-device safe-area inset instead of a Platform.OS guess — correct
+  // on iPhones with/without a home indicator and Android gesture/3-button nav.
+  // Called unconditionally (before the early-return below) to satisfy the
+  // Rules of Hooks.
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 8);
+
   // Journal owns its own bottom bar (Home/Calendar/Search/Private); modules
   // switch from the top row, so hide the parent module bar while in Journal.
   if (state.routes[state.index]?.name === 'Journal') return null;
+
   return (
-    <View style={tb.container}>
+    <View style={[tb.container, { height: TAB_CONTENT_H + bottomPad, paddingBottom: bottomPad }]}>
       {state.routes.map((route, index) => {
         const { options }   = descriptors[route.key];
         const isFocused     = state.index === index;
@@ -92,9 +100,17 @@ function SuperGirlTabBar({ state, descriptors, navigation }: BottomTabBarProps) 
 // ── Navigator ─────────────────────────────────────────────────────────────────
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+// Fits and Trackers aren't built out yet — development is focused on Journal
+// first, so both tabs mount the shared placeholder instead of their real
+// navigators. Swap these back to <FitsNavigator />/<TrackersNavigator />
+// (re-add the imports above) once each module is ready to ship.
+function FitsPlaceholder() { return <UnderDevelopmentScreen module="fits" />; }
+function TrackersPlaceholder() { return <UnderDevelopmentScreen module="trackers" />; }
+
 export function MainAppNavigator() {
   return (
     <Tab.Navigator
+      id="RootTabs"
       tabBar={(props) => <SuperGirlTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
@@ -107,14 +123,14 @@ export function MainAppNavigator() {
       />
       <Tab.Screen
         name="Fits"
-        component={FitsNavigator}
+        component={FitsPlaceholder}
         options={({ route }) => ({
           tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
         })}
       />
       <Tab.Screen
         name="Trackers"
-        component={TrackersNavigator}
+        component={TrackersPlaceholder}
         options={({ route }) => ({
           tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
         })}
@@ -131,16 +147,16 @@ export function MainAppNavigator() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-const TAB_HEIGHT = Platform.OS === 'ios' ? 84 : 66;
+// Fixed part of the bar (icon + label + top padding); the safe-area bottom
+// inset is added per-device at render time above.
+const TAB_CONTENT_H = 58;
 
 const tb = StyleSheet.create({
   container: {
     flexDirection:   'row',
-    height:          TAB_HEIGHT,
     backgroundColor: Colors.white,
     borderTopWidth:  0.5,
     borderTopColor:  Colors.divider,
-    paddingBottom:   Platform.OS === 'ios' ? 22 : 8,
     paddingTop:      8,
     paddingHorizontal: 4,
     // subtle shadow upward

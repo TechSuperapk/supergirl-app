@@ -18,6 +18,7 @@ import { ProfileHeader }        from '../components/ProfileHeader';
 import { SubscriptionCard }     from '../components/SubscriptionCard';
 import { SettingsRow }          from '../components/SettingsRow';
 import { AppText }              from '../../../shared/components/AppText';
+import { AppTopNav }            from '../../../shared/components/AppTopNav';
 import { Colors }               from '../../../shared/theme/colors';
 import { FontFamily, FontSize } from '../../../shared/theme/typography';
 import { Spacing }              from '../../../shared/theme/spacing';
@@ -98,6 +99,13 @@ export function ProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" />
+
+      {/* Top nav — identical on every feature's home screen */}
+      <AppTopNav
+        active="me"
+        onBellPress={() => navigation.navigate('Notifications')}
+        onMenuPress={() => navigation.navigate('Notifications')}
+      />
 
       {/* Header */}
       <View style={s.topBar}>

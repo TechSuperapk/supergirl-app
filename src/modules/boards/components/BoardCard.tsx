@@ -26,6 +26,10 @@ export function BoardCard({ board, onPress, onLongPress }: Props) {
   const meta = BOARD_TYPE_META[board.type];
 
   return (
+    // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
+    // inner TouchableOpacity clips the preview to its rounded corners.
+    // overflow:'hidden' on the SAME view as a shadow suppresses it on Android.
+    <View style={s.cardShadowWrap}>
     <TouchableOpacity
       style={s.card}
       onPress={onPress}
@@ -86,17 +90,24 @@ export function BoardCard({ board, onPress, onLongPress }: Props) {
         </View>
       </View>
     </TouchableOpacity>
+    </View>
   );
 }
 
 export { BOARD_TYPE_META };
 
 const s = StyleSheet.create({
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  cardShadowWrap: {
+    borderRadius:    Radius.lg,
+    backgroundColor: Colors.bgCard,
+    ...Shadows.md,
+  },
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius:    Radius.lg,
     overflow:        'hidden',
-    ...Shadows.md,
   },
   preview: {
     height:           170,

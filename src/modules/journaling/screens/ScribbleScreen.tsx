@@ -8,7 +8,7 @@
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Alert, PanResponder, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,11 +20,12 @@ import { saveScribblePage } from '../store/journalSlice';
 import type { JournalStackParamList } from '../../../navigation/JournalNavigator';
 import { ScribblePath, ScribblePage } from '../types';
 import { saveJournalEntry } from '../services/journalDbService';
+import { SCRIBBLE_CANVAS_WIDTH, SCRIBBLE_CANVAS_HEIGHT } from '../scribbleConstants';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'Scribble'>;
 
-const { width: SW, height: SH } = Dimensions.get('window');
-const CANVAS_H = SH * 0.72;
+const SW = SCRIBBLE_CANVAS_WIDTH;
+const CANVAS_H = SCRIBBLE_CANVAS_HEIGHT;
 const FONT = 'DMSans-Regular';
 const FONT_BOLD = 'DMSans-Bold';
 
@@ -37,7 +38,16 @@ const PEN_SIZES = [2, 4, 7, 12];
 
 export function ScribbleScreen({ navigation, route }: Props) {
   const dispatch   = useDispatch();
-  const { entryId, pageId } = route.params;
+  // Note mode: opened from the Notes editor with only `onDone` (no
+  // entryId/pageId) — same screen/canvas/toolbar/behavior, but the drawing
+  // is handed back via callback instead of being saved to a journal entry.
+  // `route.params` defensively defaults to {} — it should always be set by
+  // the caller, but destructuring `in` against undefined would crash the
+  // whole screen instead of just falling back to journal-mode's empty state.
+  const params  = route.params ?? ({} as JournalStackParamList['Scribble']);
+  const onDone  = 'onDone' in params ? params.onDone : undefined;
+  const entryId = 'entryId' in params ? params.entryId : undefined;
+  const pageId  = 'pageId' in params ? params.pageId : undefined;
   const userId = useSelector((s: RootState) => s.auth.user?.id);
 
   // Load existing page from Redux
@@ -58,6 +68,18 @@ export function ScribbleScreen({ navigation, route }: Props) {
 
   const effectiveColor = isEraser ? '#FFFFFF' : penColor;
   const effectiveSize  = isEraser ? 24 : penSize;
+  // PanResponder.create() only runs once (it's wrapped in useRef below so the
+  // gesture doesn't get torn down/recreated mid-stroke), so its handlers
+  // close over whatever `effectiveColor`/`effectiveSize` were on that very
+  // first render — permanently, even after picking a different color later.
+  // That was the bug behind every stroke saving in the same (initial,
+  // black) color no matter what was selected. Reading through refs instead
+  // means the handlers always see the latest value at the moment a stroke
+  // actually ends, regardless of when the PanResponder itself was built.
+  const effectiveColorRef = useRef(effectiveColor);
+  const effectiveSizeRef  = useRef(effectiveSize);
+  effectiveColorRef.current = effectiveColor;
+  effectiveSizeRef.current  = effectiveSize;
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -74,31 +96,45 @@ export function ScribbleScreen({ navigation, route }: Props) {
     onPanResponderRelease: () => {
       setCurrent(prev => {
         if (prev) {
-          setPaths(p => [...p, { d: prev, color: effectiveColor, width: effectiveSize }]);
+          setPaths(p => [...p, { d: prev, color: effectiveColorRef.current, width: effectiveSizeRef.current }]);
         }
         return '';
       });
     },
   })).current;
 
-  // Auto-save on any path change (debounced)
+  // Auto-save on any path change (debounced) — journal mode only. Note mode
+  // hands the drawing to the caller via `onDone`, which isn't idempotent
+  // (each call adds another sketch attachment to the note), so it must only
+  // fire once, on back-press, not on every debounced path change.
   const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   useEffect(() => {
+    if (onDone) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { doSave(paths); }, 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [paths]);
+  }, [paths, onDone]);
 
   const doSave = useCallback(async (currentPaths: ScribblePath[]) => {
+    if (onDone) {
+      // Hand back the same raw path data Journal stores (ScribblePath[]),
+      // so the caller can render it exactly the way Journal renders an
+      // inline scribble (Svg + SvgPath against SCRIBBLE_VIEW_BOX) instead
+      // of a baked, non-interactive image.
+      if (currentPaths.length > 0) onDone(currentPaths);
+      setSaved(true);
+      return;
+    }
+
     const page: ScribblePage = {
-      id: pageId,
+      id: pageId!,
       paths: currentPaths,
       createdAt: existingPage?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
+
     // Update locally first
-    dispatch(saveScribblePage({ entryId, page }));
+    dispatch(saveScribblePage({ entryId: entryId!, page }));
     setSaved(true);
 
     // Save to Firestore
@@ -120,7 +156,7 @@ export function ScribbleScreen({ navigation, route }: Props) {
         console.error('Failed to sync scribble to database:', e);
       }
     }
-  }, [dispatch, entryId, pageId, existingPage, userId, entry]);
+  }, [dispatch, entryId, pageId, existingPage, userId, entry, onDone]);
 
   const handleUndo = () => setPaths(p => p.slice(0, -1));
   const handleClear = () => Alert.alert('Clear', 'Erase all drawings?', [
@@ -246,7 +282,10 @@ const s = StyleSheet.create({
   clearTxt:{ fontSize:13, color:'#EF5350' },
   canvas: {
     flex:1,
-    backgroundColor:'#FAFAFA',
+    // Clearly darker than pure white so a white pen stroke is actually
+    // visible while drawing — '#FAFAFA' was only 5 points off white and
+    // made the white pen option look broken/invisible.
+    backgroundColor:'#E7E7EA',
     borderBottomWidth:0.5,
     borderBottomColor:'#E8E8E8',
     alignItems:'center',

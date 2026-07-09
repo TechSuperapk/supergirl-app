@@ -11,6 +11,7 @@ import { subscribeToJournalEntries, subscribeToVault, subscribeToDrafts } from '
 import { saveBackup, getBestBackup, pushRestoredToServer } from '../modules/journaling/services/backupService';
 import { initBackupSystem, teardownBackupSystem } from '../backup';
 import { startJournalSync, stopJournalSync } from '../modules/journaling/offline/journalSync';
+import { startNotesSync, stopNotesSync } from '../modules/journaling/offline/notesSync';
 import { mergeServerWithLocal, RichJournals } from '../modules/journaling/offline/richJournalStore';
 import { SplashScreen }       from '../modules/auth/screens/SplashScreen';
 import { OnboardingScreen }   from '../modules/auth/screens/OnboardingScreen';
@@ -59,6 +60,15 @@ export function RootNavigator() {
     startJournalSync(user.id, (e) => dispatch(updateEntry(e)));
     return () => stopJournalSync();
   }, [isLoggedIn, user?.id, dispatch]);
+
+  // Quick Notes: same background-upload durability for photos/voice clips
+  // as Journal, without adding a Firestore sync for the notes themselves
+  // (they remain local-only, same as before).
+  useEffect(() => {
+    if (!isLoggedIn || !user?.id) return;
+    startNotesSync(user.id);
+    return () => stopNotesSync();
+  }, [isLoggedIn, user?.id]);
 
   useEffect(() => {
     if (!isLoggedIn || !user?.id) return;

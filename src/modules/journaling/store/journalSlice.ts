@@ -53,6 +53,10 @@ const journalSlice = createSlice({
       const i = state.entries.findIndex(e => e.id === a.payload);
       if (i !== -1) state.entries[i].isPrivate = false;
     },
+    setFavorite(state, a: PayloadAction<{ id: string; isFavorite: boolean }>) {
+      const i = state.entries.findIndex(e => e.id === a.payload.id);
+      if (i !== -1) state.entries[i].isFavorite = a.payload.isFavorite;
+    },
     saveScribblePage(state, a: PayloadAction<{ entryId: string; page: ScribblePage }>) {
       const { entryId, page } = a.payload;
       for (const arr of [state.entries, state.drafts]) {
@@ -90,7 +94,7 @@ const journalSlice = createSlice({
 
 export const {
   addEntry, updateEntry, deleteEntry, saveDraft, deleteDraft,
-  moveToPrivate, moveToPublic, saveScribblePage,
+  moveToPrivate, moveToPublic, setFavorite, saveScribblePage,
   setSelectedMood, loadEntries, loadDrafts,
   unlockVault, lockVault, setVaultPin, setSecurityQuestions, loadVault,
 } = journalSlice.actions;

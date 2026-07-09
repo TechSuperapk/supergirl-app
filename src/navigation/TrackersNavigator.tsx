@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator }     from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator }   from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Real screens
 import { TrackersHomeScreen }    from '../modules/trackers/screens/TrackersHomeScreen';
@@ -82,12 +83,16 @@ const TABS = [
 const Tab = createBottomTabNavigator();
 
 function TrackersTabs() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 8);
+  const tabBar = { ...s.tabBar, height: TAB_CONTENT_H + bottomPad, paddingBottom: bottomPad };
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown:     false,
         tabBarShowLabel: false,
-        tabBarStyle:     s.tabBar,
+        tabBarStyle:     tabBar,
         tabBarIcon: ({ focused }) => {
           const tab = TABS.find(t => t.name === route.name)!;
           return (
@@ -119,13 +124,13 @@ export function TrackersNavigator() {
   );
 }
 
+const TAB_CONTENT_H = 58;
+
 const s = StyleSheet.create({
   tabBar: {
     backgroundColor: Colors.white,
     borderTopColor:  Colors.divider,
     borderTopWidth:  0.5,
-    height:          Platform.OS === 'ios' ? 82 : 66,
-    paddingBottom:   Platform.OS === 'ios' ? 22 : 8,
     paddingTop:      8,
   },
   iconWrap:    { alignItems: 'center', gap: 2 },

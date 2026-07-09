@@ -14,6 +14,7 @@ import {
 } from '../hooks/useTrackers';
 import { AppText }           from '../../../shared/components/AppText';
 import { AppCard }           from '../../../shared/components/AppCard';
+import { AppTopNav }         from '../../../shared/components/AppTopNav';
 import { Colors }            from '../../../shared/theme/colors';
 import { Spacing, Radius, Shadows } from '../../../shared/theme/spacing';
 import { MOOD_OPTIONS }      from '../components/MoodSelector';
@@ -80,6 +81,9 @@ export function TrackersHomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Top nav — identical on every feature's home screen */}
+      <AppTopNav active="goals" />
+
       <View style={s.header}>
         <View>
           <AppText variant="headingLarge" color={Colors.textPrimary}>Trackers</AppText>

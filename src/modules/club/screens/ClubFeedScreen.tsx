@@ -14,6 +14,7 @@ import { AppText }       from '../../../shared/components/AppText';
 import { AppEmptyState } from '../../../shared/components/AppEmptyState';
 import { AppLoadingSpinner } from '../../../shared/components/AppLoadingSpinner';
 import { AppAvatar }     from '../../../shared/components/AppAvatar';
+import { AppTopNav }     from '../../../shared/components/AppTopNav';
 import { Colors }        from '../../../shared/theme/colors';
 import { Spacing }       from '../../../shared/theme/spacing';
 import { Post }          from '../types';
@@ -42,6 +43,11 @@ export function ClubFeedScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Top nav — identical on every feature's home screen.
+          Note: Club isn't mounted under the root tab navigator yet, so this
+          screen currently can only be reached in isolation (e.g. dev/preview). */}
+      <AppTopNav active="club" onBellPress={() => {}} onMenuPress={() => {}} />
+
       {/* Header */}
       <View style={s.header}>
         <AppText variant="headingLarge" color={Colors.textPrimary}>Club</AppText>

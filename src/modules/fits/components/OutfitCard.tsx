@@ -17,6 +17,10 @@ export function OutfitCard({ outfit, items, onPress }: Props) {
   const preview = items.slice(0, 4);
 
   return (
+    // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
+    // inner TouchableOpacity clips the image mosaic to its rounded corners.
+    // overflow:'hidden' on the SAME view as a shadow suppresses it on Android.
+    <View style={s.cardShadowWrap}>
     <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.88}>
       {/* Image mosaic */}
       <View style={s.mosaic}>
@@ -76,15 +80,22 @@ export function OutfitCard({ outfit, items, onPress }: Props) {
         )}
       </View>
     </TouchableOpacity>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  cardShadowWrap: {
+    borderRadius:    Radius.lg,
+    backgroundColor: Colors.bgCard,
+    ...Shadows.md,
+  },
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius:    Radius.lg,
     overflow:        'hidden',
-    ...Shadows.md,
   },
   mosaic:      { height: 160, position: 'relative', backgroundColor: Colors.bgInput },
   emptyMosaic: { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.fits + '12' },

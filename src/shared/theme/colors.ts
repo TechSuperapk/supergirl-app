@@ -10,7 +10,7 @@ export const Colors = {
   primaryDark:   '#1565C0',
 
   // ── Backgrounds ────────────────────────────
-  bgApp:         '#F5F5F5',   // main app bg
+  bgApp:         '#FFFFFF',   // main app bg
   bgCard:        '#FFFFFF',
   bgSplash:      '#FDFAF7',
   bgInput:       '#F7F8FA',

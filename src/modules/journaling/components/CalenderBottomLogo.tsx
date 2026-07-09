@@ -1,0 +1,20 @@
+import * as React from "react";
+import Svg, { Path, SvgProps } from "react-native-svg";
+const CalenderBottomLogo = (props:SvgProps) => (
+  <Svg
+    width={24}
+    height={24}
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    <Path
+      d="M3 10.625H21M17 2.625V6.625M7 2.625V6.625M7.375 14.14H8.403M15.597 14.14H16.625M11.486 14.14H12.514M7.375 17.224H8.403M15.597 17.224H16.625M11.486 17.224H12.514M17 4.625H7C5.93913 4.625 4.92172 5.04643 4.17157 5.79657C3.42143 6.54672 3 7.56413 3 8.625V17.375C3 18.4359 3.42143 19.4533 4.17157 20.2034C4.92172 20.9536 5.93913 21.375 7 21.375H17C18.0609 21.375 19.0783 20.9536 19.8284 20.2034C20.5786 19.4533 21 18.4359 21 17.375V8.625C21 7.56413 20.5786 6.54672 19.8284 5.79657C19.0783 5.04643 18.0609 4.625 17 4.625Z"
+      stroke="#696C70"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+export default CalenderBottomLogo;

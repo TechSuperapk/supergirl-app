@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextProps, TextStyle } from 'react-native';
+import { Text, TextProps, TextStyle, Platform } from 'react-native';
 import { TextStyles, FontFamily } from '../theme/typography';
 import { Colors } from '../theme/colors';
 
@@ -11,6 +11,16 @@ interface AppTextProps extends TextProps {
   align?:    TextStyle['textAlign'];
   children:  React.ReactNode;
 }
+
+// Android reserves extra vertical space above/below glyphs by default
+// ("font padding") that iOS doesn't — with the same fontSize/lineHeight this
+// makes every card, chip, and button using AppText read visibly taller/more
+// spaced-out on Android than iOS. Turning it off here (once, for every
+// AppText in the app) is what actually lines the two platforms up, rather
+// than nudging paddings/margins per screen.
+const androidTextFix: TextStyle = Platform.OS === 'android'
+  ? { includeFontPadding: false, textAlignVertical: 'center' }
+  : {};
 
 export function AppText({
   variant = 'body',
@@ -24,6 +34,7 @@ export function AppText({
     <Text
       style={[
         TextStyles[variant],
+        androidTextFix,
         color ? { color } : undefined,
         align ? { textAlign: align } : undefined,
         style,

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, Dimensions, Image, Modal,
-  PanResponder, Animated,
+  PanResponder, Animated, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView }            from 'react-native-safe-area-context';
 import { NativeStackScreenProps }  from '@react-navigation/native-stack';
@@ -34,6 +34,9 @@ import TextLogo     from '../components/TextLogo';
 import VideoLogo    from '../components/VideoLogo';
 import ThemeLogo    from '../components/ThemeLogo';
 import PrivateLogo  from '../components/PrivateLogo';
+import PinLogo       from '../components/PinLogo';
+import CheckLogo     from '../components/CheckLogo';
+import { VoiceWidget, RecordingWidget } from '../components/VoiceWidgets';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'WriteEntry'>;
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -131,69 +134,6 @@ function Sticker({sp,onCommit,onDelete,setActive,setArmed,setOverTrash}:{sp:Stic
   );
 }
 
-// ── Telegram-style Voice Widget ───────────────────────────────────────────────
-function VoiceWidget({uri,accent,onDelete}:{uri:string;accent:string;onDelete:()=>void}) {
-  const [playing,setPlaying]=useState(false);
-  const [pos,setPos]=useState(0); // 0-1
-  const soundRef=useRef<Audio.Sound|null>(null);
-  const play=async()=>{
-    try {
-      if(soundRef.current){await soundRef.current.unloadAsync();soundRef.current=null;}
-      const {sound}=await Audio.Sound.createAsync({uri});
-      soundRef.current=sound; setPlaying(true);
-      sound.setOnPlaybackStatusUpdate(st=>{
-        if(!st.isLoaded) return;
-        if(st.durationMillis) setPos(st.positionMillis/st.durationMillis);
-        if(st.didJustFinish){setPlaying(false);setPos(0);}
-      });
-      await sound.playAsync();
-    } catch(e){}
-  };
-  const stop=async()=>{if(soundRef.current){await soundRef.current.stopAsync();setPlaying(false);}};
-  // Fake waveform bars
-  const bars=Array.from({length:28},(_,i)=>Math.sin(i*0.7)*0.4+Math.random()*0.4+0.2);
-  const filled=Math.round(pos*bars.length);
-  return (
-    <View style={vw.wrap}>
-      <TouchableOpacity onPress={playing?stop:play} style={[vw.playBtn,{backgroundColor:accent}]}>
-        <Text style={vw.playIco}>{playing?'⏹':'▶'}</Text>
-      </TouchableOpacity>
-      <View style={vw.wave}>
-        {bars.map((h,i)=>(
-          <View key={i} style={[vw.bar,{height:Math.max(4,h*28),backgroundColor:i<filled?accent:'#DDD'}]}/>
-        ))}
-      </View>
-      <TouchableOpacity onPress={onDelete} style={vw.delBtn}><Text style={vw.delT}>×</Text></TouchableOpacity>
-    </View>
-  );
-}
-
-// ── Recording Widget ──────────────────────────────────────────────────────────
-function RecordingWidget({accent,onStop}:{accent:string;onStop:(uri:string)=>void}) {
-  const [secs,setSecs]=useState(0);
-  const timer=useRef<ReturnType<typeof setInterval>|null>(null);
-  useEffect(()=>{
-    timer.current=setInterval(()=>setSecs(s=>s+1),1000);
-    return ()=>{if(timer.current)clearInterval(timer.current);};
-  },[]);
-  const mm=String(Math.floor(secs/60)).padStart(2,'0');
-  const ss=String(secs%60).padStart(2,'0');
-  const bars=Array.from({length:28},(_,i)=>0.2+Math.abs(Math.sin(Date.now()/200+i))*0.6);
-  return (
-    <View style={vw.wrap}>
-      <View style={[vw.playBtn,{backgroundColor:'#EF5350'}]}>
-        <View style={{width:10,height:10,borderRadius:5,backgroundColor:'#FFF'}}/>
-      </View>
-      <View style={vw.wave}>
-        {bars.map((h,i)=>(
-          <View key={i} style={[vw.bar,{height:Math.max(4,h*28),backgroundColor:accent}]}/>
-        ))}
-      </View>
-      <Text style={[vw.timer,{fontFamily:'DMSans-Regular'}]}>{mm}:{ss}</Text>
-    </View>
-  );
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function WriteEntryScreen({navigation,route}:Props) {
   const dispatch=useDispatch();
@@ -209,10 +149,14 @@ export function WriteEntryScreen({navigation,route}:Props) {
   const [title,setTitle]=useState(existing?.title??'');
   const [body,setBody]=useState(existing?.body??'');
   const [mood,setMood]=useState<Mood>(existing?.mood??'happy');
-  const [moodDone,setMoodDone]=useState(!!existing);
+  const [moodDone,setMoodDone]=useState(!!existing || !!route.params?.skipMood);
   const [tags,setTags]=useState<string[]>(existing?.tags??[]);
   const [stickers,setStickers]=useState<StickerPlacement[]>(existing?.stickerPlacements??[]);
   const [priv,setPriv]=useState(existing?.isPrivate ?? route.params?.private ?? false);
+  // Pin toggle in the header, same as Notes' pinned flag — Quotes/Ideas/
+  // Affirmation entries didn't have a way to mark themselves important
+  // before this, so it reuses the existing isImportant field.
+  const [important,setImportant]=useState(existing?.isImportant ?? false);
   const [theme,setTheme]=useState<JournalTheme>(existing?.theme??'default');
   const [tColor,setTColor]=useState(existing?.textColor??'#111111');
   const [fSize,setFSize]=useState(existing?.fontSize??16);
@@ -226,6 +170,12 @@ export function WriteEntryScreen({navigation,route}:Props) {
   const [bodyFocus,setBodyFocus]=useState(false);
   const [saving,setSaving]=useState(false);
   const recRef=useRef<Audio.Recording|null>(null);
+  // Reactive window size — used for grid/preview sizing below so layout
+  // stays correct if the window itself changes (Android split-screen,
+  // foldables, iPad multitasking), unlike the module-level SW/SH above
+  // (which only reflect the size at first launch and are only used for the
+  // sticker-drag-to-trash gesture math, not layout).
+  const { width: winW, height: winH } = useWindowDimensions();
   const th=JOURNAL_THEMES.find(t=>t.id===theme)??JOURNAL_THEMES[0];
   const selMood=MOOD_OPTIONS.find(m=>m.value===mood)??MOOD_OPTIONS[0];
   const detected=detectHashtags(body);
@@ -242,16 +192,17 @@ export function WriteEntryScreen({navigation,route}:Props) {
     id:eid,title:title.trim()||'Untitled',body,detectedHashtags:detected,mood,tags,
     stickers:stickers.map(s=>s.asset??s.emoji??''),stickerPlacements:stickers,
     scribblePages:liveScribbles,
-    isPrivate:priv,theme,textColor:tColor,fontSize:fSize,mediaUrls:media,
+    isPrivate:priv,isImportant:important,theme,category:(existing?.category ?? (route.params?.category as any)),textColor:tColor,fontSize:fSize,mediaUrls:media,
     voiceNoteUrl:voice||undefined,
     createdAt:existing?.createdAt??date.toISOString(),
     updatedAt:new Date().toISOString(),isDraft,
+    mode: existing?.mode ?? 'freestyle',
   });
 
   useEffect(()=>{
     const t=setInterval(()=>{if(title.trim()||body.trim())persistDraft();},15000);
     return ()=>clearInterval(t);
-  },[title,body,mood,theme,stickers,media,voice,priv,tColor,fSize,tags]);
+  },[title,body,mood,theme,stickers,media,voice,priv,important,tColor,fSize,tags]);
 
   const save=async()=>{
     if(!title.trim()&&!body.trim()){Alert.alert('Empty','Write something first.');return;}
@@ -376,8 +327,8 @@ export function WriteEntryScreen({navigation,route}:Props) {
         <View style={s.prevOver}>
           {preview ? (
             preview.isVid
-              ?<Video source={{uri:preview.url}} style={s.prevImg} resizeMode={ResizeMode.CONTAIN} shouldPlay useNativeControls/>
-              :<Image source={{uri:preview.url}} style={s.prevImg} resizeMode="contain"/>
+              ?<Video source={{uri:preview.url}} style={[s.prevImg,{width:winW,height:winH*0.8}]} resizeMode={ResizeMode.CONTAIN} shouldPlay useNativeControls/>
+              :<Image source={{uri:preview.url}} style={[s.prevImg,{width:winW,height:winH*0.8}]} resizeMode="contain"/>
           ) : null}
           <TouchableOpacity style={s.prevClose} onPress={()=>setPreview(null)}>
             <Text style={s.prevCloseT}>✕</Text>
@@ -392,7 +343,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
             <Text style={[s.moodSheetT,{fontFamily:FB}]}>Change Mood</Text>
             <View style={s.moodGrid}>
               {MOOD_OPTIONS.map(m=>(
-                <TouchableOpacity key={m.value} style={[s.moodOpt,mood===m.value&&{backgroundColor:m.color+'30'}]}
+                <TouchableOpacity key={m.value} style={[s.moodOpt,{width:(winW-80)/5},mood===m.value&&{backgroundColor:m.color+'30'}]}
                   onPress={()=>{setMood(m.value as Mood);setMoodModal(false);}}>
                   <View style={[s.moodCirc,{backgroundColor:m.color}]}><Text style={{fontSize:22}}>{m.emoji}</Text></View>
                   <Text style={[s.moodLbl,{fontFamily:F}]}>{m.label}</Text>
@@ -412,11 +363,15 @@ export function WriteEntryScreen({navigation,route}:Props) {
           <TouchableOpacity onPress={()=>{persistDraft();navigation.goBack();}} style={s.backBtn}>
             <Text style={s.backArr}>←</Text>
           </TouchableOpacity>
+          {/* Pin + Save, same icons/layout as Notes' header (PinLogo/CheckLogo). */}
+          <TouchableOpacity style={[s.pinBtn,{borderColor:important?th.accent:'#E0E0E0'}]} activeOpacity={0.7} onPress={()=>setImportant(p=>!p)}>
+            <PinLogo width={18} height={18} />
+          </TouchableOpacity>
           <TouchableOpacity style={[s.saveBtn,{backgroundColor:th.accent}]} onPress={save} disabled={saving}>
             {saving ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={[s.saveT,{fontFamily:FB}]}>Save</Text>
+              <CheckLogo width={18} height={18} />
             )}
           </TouchableOpacity>
         </View>
@@ -559,7 +514,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
               <View style={s.themeGrid}>
                 {JOURNAL_THEMES.map(t=>(
                   <TouchableOpacity key={t.id}
-                    style={[s.themeOpt,{backgroundColor:t.bg,borderColor:theme===t.id?t.accent:'#DDD',borderWidth:theme===t.id?2.5:1}]}
+                    style={[s.themeOpt,{width:(winW-28-32-20)/4},{backgroundColor:t.bg,borderColor:theme===t.id?t.accent:'#DDD',borderWidth:theme===t.id?2.5:1}]}
                     onPress={()=>{setTheme(t.id);setPanel('none');}}>
                     <View style={[s.thDot,{backgroundColor:t.accent}]}/>
                     <Text style={[s.thLbl,{fontFamily:F,color:t.id==='night'?'#FFF':'#333'}]}>{t.label}</Text>
@@ -676,32 +631,24 @@ const stk=StyleSheet.create({
   del:{position:'absolute',top:-8,right:-8,width:20,height:20,borderRadius:10,backgroundColor:'#EF5350',alignItems:'center',justifyContent:'center'},
   delT:{fontSize:13,color:'#FFF',lineHeight:18},
 });
-const vw=StyleSheet.create({
-  wrap:{flexDirection:'row',alignItems:'center',gap:10,marginHorizontal:16,marginVertical:8,padding:12,backgroundColor:'#F0F4FF',borderRadius:20},
-  playBtn:{width:38,height:38,borderRadius:19,alignItems:'center',justifyContent:'center'},
-  playIco:{fontSize:14,color:'#FFF'},
-  wave:{flex:1,flexDirection:'row',alignItems:'center',gap:2,height:32},
-  bar:{width:3,borderRadius:2},
-  timer:{fontSize:12,color:'#555',minWidth:36,textAlign:'right'},
-  delBtn:{paddingHorizontal:8},delT:{fontSize:18,color:'#888'},
-});
 const s=StyleSheet.create({
   safe:{flex:1},
   prevOver:{flex:1,backgroundColor:'rgba(0,0,0,0.95)',alignItems:'center',justifyContent:'center'},
-  prevImg:{width:SW,height:SH*0.8},
+  prevImg:{},
   prevClose:{position:'absolute',top:50,right:20,width:38,height:38,borderRadius:19,backgroundColor:'rgba(255,255,255,0.25)',alignItems:'center',justifyContent:'center'},
   prevCloseT:{fontSize:18,color:'#FFF'},
   moodOver:{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'},
   moodSheet:{backgroundColor:'#FFF',borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,paddingBottom:36},
   moodSheetT:{fontSize:17,color:'#111',marginBottom:16,textAlign:'center'},
   moodGrid:{flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'center'},
-  moodOpt:{alignItems:'center',gap:4,padding:8,borderRadius:12,width:(SW-80)/5},
+  moodOpt:{alignItems:'center',gap:4,padding:8,borderRadius:12},
   moodCirc:{width:42,height:42,borderRadius:21,alignItems:'center',justifyContent:'center'},
   moodLbl:{fontSize:10,color:'#555'},
   moodCancel:{alignItems:'center',marginTop:16},
   topBar:{flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:10,borderBottomWidth:0.5,borderBottomColor:'#E8E8E8',gap:10},
   backBtn:{padding:6},backArr:{fontSize:22,color:'#111'},
-  saveBtn:{borderRadius:15,paddingHorizontal:20,paddingVertical:9,marginLeft:'auto'},saveT:{fontSize:15,color:'#FFF'},
+  pinBtn:{width:40,height:40,borderRadius:12,borderWidth:1,alignItems:'center',justifyContent:'center',marginLeft:'auto'},
+  saveBtn:{width:40,height:40,borderRadius:12,alignItems:'center',justifyContent:'center'},
   dateRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:16,paddingVertical:12},
   dateLeft:{flexDirection:'row',alignItems:'baseline',flex:1},
   dateDay:{fontSize:32},dateMon:{fontSize:14},
@@ -727,7 +674,7 @@ const s=StyleSheet.create({
   panel:{marginHorizontal:14,marginTop:6,marginBottom:4,borderRadius:18,padding:16,shadowColor:'#000',shadowOffset:{width:0,height:2},shadowOpacity:0.08,shadowRadius:8,elevation:4},
   panelT:{fontSize:15,color:'#111',marginBottom:8},panelSub:{fontSize:12,color:'#666',marginBottom:8,marginTop:6},
   themeGrid:{flexDirection:'row',flexWrap:'wrap',gap:10},
-  themeOpt:{width:(SW-28-32-20)/4,borderRadius:12,padding:10,alignItems:'center',gap:6},
+  themeOpt:{borderRadius:12,padding:10,alignItems:'center',gap:6},
   thDot:{width:20,height:20,borderRadius:10},thLbl:{fontSize:11},
   fsRow:{flexDirection:'row',gap:8,flexWrap:'wrap'},
   fsBtn:{width:44,height:44,borderRadius:10,backgroundColor:'#F0F0F0',alignItems:'center',justifyContent:'center'},

@@ -5,6 +5,7 @@ import {
   TextInputProps,
   StyleSheet,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { AppText } from './AppText';
 import { Colors } from '../theme/colors';
@@ -92,6 +93,10 @@ const s = StyleSheet.create({
     fontSize:        FontSize.base,
     color:           Colors.textPrimary,
     paddingVertical: Spacing.md,
+    // Android reserves extra glyph padding that iOS doesn't, which makes a
+    // single-line input's text sit visibly higher/lower than its container
+    // (and throws off the row's perceived spacing vs. the iOS build).
+    ...(Platform.OS === 'android' ? { includeFontPadding: false, textAlignVertical: 'center' as const } : null),
   },
   errorText: { marginTop: 2 },
 });

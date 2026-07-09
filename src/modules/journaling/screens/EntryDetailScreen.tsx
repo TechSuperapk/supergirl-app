@@ -1,35 +1,38 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Modal } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { Video, Audio, ResizeMode } from 'expo-av';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { RootState } from '../../../store';
-import { deleteEntry, moveToPrivate, moveToPublic } from '../store/journalSlice';
+import { deleteEntry, moveToPrivate, moveToPublic, setFavorite } from '../store/journalSlice';
 import { deleteJournalEntry, updateJournalEntryFields } from '../services/journalDbService';
 import { useOfflineJournal } from '../offline/useOfflineJournal';
 import { JournalStackParamList } from '../../../navigation/JournalNavigator';
-import { MOOD_OPTIONS, JOURNAL_THEMES, StickerPlacement, detectHashtags } from '../types';
-import { StickerGlyph } from '../components/StickerGlyph';
+import { JOURNAL_THEMES } from '../types';
+import { blocksFromEntry } from '../contentBlocks';
+import { JournalCanvas } from '../components/guided';
+import { ALL_TYPES, JOURNAL_TYPE_ICONS } from '../components/home';
+import { Image as ExpoImage } from 'expo-image';
+import { mergeAttachments } from '../attachmentOrder';
+import { SCRIBBLE_VIEW_BOX } from '../scribbleConstants';
+import CalendarLogo from '../../../../assets/images/CalenderTopLogo';
+
+// Read-only canvas needs a `colors` shape ({border, textMuted}) the same way
+// GuidedEntryScreen gets it from useTheme() — this screen never used
+// useTheme (all hardcoded literals), so this mirrors the same values that
+// were already hardcoded in the old canvas styles (divider '#E0E0E0',
+// auto-tag row border '#EEE', placeholder-ish muted text '#888').
+const detailColors = { border: '#E0E0E0', textMuted: '#888' };
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'EntryDetail'>;
 const F  = 'DMSans-Regular';
 const FB = 'DMSans-Bold';
-
-// ── Hashtag highlight ─────────────────────────────────────────────────────────
-function HighlightedText({text,color,fs,accent}:{text:string;color:string;fs:number;accent:string}) {
-  if(!text) return null;
-  return (
-    <Text style={{color,fontSize:fs,fontFamily:F,lineHeight:fs*1.65}}>
-      {text.split(/(#\w+)/g).map((p,i)=>
-        /^#\w+$/.test(p)
-          ?<Text key={i} style={{color:accent,fontFamily:FB,backgroundColor:accent+'20'}}>{p}</Text>
-          :<Text key={i}>{p}</Text>
-      )}
-    </Text>
-  );
-}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// Same set as GuidedEntryScreen's GUIDED_TYPES — these categories are edited
+// on the Guided/Freestyle screen; everything else uses the plain editor.
+const GUIDED_TYPES = new Set(['morning', 'night', 'dream', 'vent']);
 
 // ── Voice playback — Telegram style ──────────────────────────────────────────
 function VoiceWidget({uri,accent}:{uri:string;accent:string}) {
@@ -69,7 +72,8 @@ function VoiceWidget({uri,accent}:{uri:string;accent:string}) {
 export function EntryDetailScreen({navigation,route}:Props) {
   const dispatch=useDispatch();
   const { removeEntry }=useOfflineJournal();
-  const entry=useSelector((s:RootState)=>s.journal.entries.find(e=>e.id===route.params.entryId));
+  const allEntries=useSelector((s:RootState)=>s.journal.entries);
+  const entry=allEntries.find(e=>e.id===route.params.entryId);
   const vaultPin=useSelector((s:RootState)=>s.journal.vaultPin);
   const [preview,setPreview]=useState<{url:string;isVid:boolean}|null>(null);
   const [scribPreview,setScribPreview]=useState<any|null>(null);
@@ -77,6 +81,22 @@ export function EntryDetailScreen({navigation,route}:Props) {
   const [pinAction,setPinAction]=useState<'toPrivate'|'toPublic'|null>(null);
   const [pin,setPin]=useState('');
   const [pinErr,setPinErr]=useState('');
+  // Reactive window size (replaces the module-level Dimensions.get('window')
+  // snapshot below, which never updates if the window itself changes —
+  // Android split-screen, foldables, iPad multitasking).
+  const { width: winW, height: winH } = useWindowDimensions();
+
+  // Previous/Next — flip between diary entries in chronological order
+  // (oldest → newest), like turning pages forward in a physical diary.
+  const sortedEntries=useMemo(
+    ()=>[...allEntries].filter(e=>!e.isDraft).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)),
+    [allEntries],
+  );
+  const entryIdx=entry?sortedEntries.findIndex(e=>e.id===entry.id):-1;
+  const prevEntry=entryIdx>0?sortedEntries[entryIdx-1]:null;
+  const nextEntry=entryIdx>=0&&entryIdx<sortedEntries.length-1?sortedEntries[entryIdx+1]:null;
+  const goPrev=()=>{ if(prevEntry) navigation.replace('EntryDetail',{entryId:prevEntry.id}); };
+  const goNext=()=>{ if(nextEntry) navigation.replace('EntryDetail',{entryId:nextEntry.id}); };
 
   if(!entry) return (
     <SafeAreaView style={{flex:1,backgroundColor:'#F5F5F5'}}>
@@ -86,11 +106,31 @@ export function EntryDetailScreen({navigation,route}:Props) {
     </SafeAreaView>
   );
 
-  const moodOpt=MOOD_OPTIONS.find(m=>m.value===entry.mood);
   const th=JOURNAL_THEMES.find(t=>t.id===entry.theme)??JOURNAL_THEMES[0];
   const date=new Date(entry.createdAt);
-  const time=date.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',hour12:false});
-  const isVid=(u:string)=>['.mp4','.mov','.avi','.mkv'].some(x=>u.toLowerCase().endsWith(x))||u.includes('video');
+  const dateLabel=date.toLocaleDateString('en',{day:'numeric',month:'short',year:'numeric'});
+  // Same "icon + category Journal" header as the editor's GuidedHeader, so
+  // the view screen reads like a continuation of the edit screen.
+  const categoryIcon=ALL_TYPES.find(t=>t.key===entry.category)?.emoji;
+  const categoryIconGif=entry.category?JOURNAL_TYPE_ICONS[entry.category]:undefined;
+  const categoryLabel=entry.category?`${cap(entry.category)} Journal`:'Journal';
+
+  // Ordered text/image blocks — prefers entry.contentBlocks (written by the
+  // current WYSIWYG editor); entries saved before inline images existed get
+  // migrated into a single text block plus one image block per legacy
+  // freeform placement, so their photos still show, just in reading order
+  // instead of at their old x/y position.
+  const blocks = blocksFromEntry(entry);
+
+  // Photos/videos/scribbles not already placed inline (as a block) — same
+  // position and small-tile layout as the editor's AttachmentGrid. Scribble
+  // pages referenced by an inline block must be excluded here, or they'd
+  // show up twice: once inline, once again via mergeAttachments' fallback
+  // (which shows any scribblePage missing an attachmentOrder token, so
+  // entries from before this existed don't silently lose anything).
+  const inlineScribbleIds = new Set(blocks.filter(b => b.type === 'scribble').map(b => b.pageId));
+  const legacyScribblePages = (entry.scribblePages ?? []).filter(p => !inlineScribbleIds.has(p.id));
+  const allAttachments=mergeAttachments(entry.mediaUrls, legacyScribblePages, entry.attachmentOrder);
 
   const handleDelete=()=>Alert.alert('Delete','This cannot be undone.',[
     {text:'Cancel',style:'cancel'},
@@ -101,6 +141,28 @@ export function EntryDetailScreen({navigation,route}:Props) {
       navigation.goBack();
     }},
   ]);
+
+  const toggleFavorite=async()=>{
+    if(!entry) return;
+    const next=!entry.isFavorite;
+    dispatch(setFavorite({id:entry.id,isFavorite:next})); // instant UI
+    try {
+      await updateJournalEntryFields(entry.id, { isFavorite: next });
+    } catch {
+      dispatch(setFavorite({id:entry.id,isFavorite:!next})); // revert if the sync fails
+      Alert.alert('Error','Failed to update favorite status.');
+    }
+  };
+
+  const openOptions=()=>{
+    if(!entry) return;
+    Alert.alert('Journal Options', undefined, [
+      { text: entry.isFavorite?'Remove from Favorites':'Add to Favorites', onPress:toggleFavorite },
+      { text: entry.isPrivate?'Move to Public Journal':'Move to Private Journal', onPress:()=>{ setPinAction(entry.isPrivate?'toPublic':'toPrivate'); setPinModal(true); } },
+      { text:'Delete', style:'destructive', onPress:handleDelete },
+      { text:'Cancel', style:'cancel' },
+    ]);
+  };
 
   const handlePinConfirm=async()=>{
     if(pin===vaultPin){
@@ -127,8 +189,8 @@ export function EntryDetailScreen({navigation,route}:Props) {
         <View style={s.prevOver}>
           {preview ? (
             preview.isVid
-              ?<Video source={{uri:preview.url}} style={s.prevImg} resizeMode={ResizeMode.CONTAIN} shouldPlay useNativeControls/>
-              :<Image source={{uri:preview.url}} style={s.prevImg} resizeMode="contain"/>
+              ?<Video source={{uri:preview.url}} style={[s.prevImg,{width:winW,height:winH*0.8}]} resizeMode={ResizeMode.CONTAIN} shouldPlay useNativeControls/>
+              :<Image source={{uri:preview.url}} style={[s.prevImg,{width:winW,height:winH*0.8}]} resizeMode="contain"/>
           ) : null}
           <TouchableOpacity style={s.prevClose} onPress={()=>setPreview(null)}>
             <Text style={s.prevCloseT}>✕</Text>
@@ -140,7 +202,7 @@ export function EntryDetailScreen({navigation,route}:Props) {
       <Modal visible={!!scribPreview} transparent animationType="fade">
         <View style={s.prevOver}>
           <View style={s.scribPrevCard}>
-            <Svg width={SW-48} height={(SW-48)*0.75}>
+            <Svg width={winW-48} height={(winW-48)*0.75} viewBox={SCRIBBLE_VIEW_BOX}>
               {(scribPreview?.paths??[]).map((p:any,i:number)=>(
                 <SvgPath key={i} d={p.d} stroke={p.color} strokeWidth={p.width}
                   strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -167,10 +229,10 @@ export function EntryDetailScreen({navigation,route}:Props) {
               ))}
             </View>
             {!!pinErr&&<Text style={[s.pinErr,{fontFamily:F}]}>{pinErr}</Text>}
-            <View style={s.pinKeypad}>
+            <View style={[s.pinKeypad,{width:winW-48}]}>
               {['1','2','3','4','5','6','7','8','9','.','0','⌫'].map((k,i)=>(
                 <TouchableOpacity key={i}
-                  style={[s.pinKey,k==='.'&&{opacity:0}]}
+                  style={[s.pinKey,{width:(winW-48-20)/3},k==='.'&&{opacity:0}]}
                   disabled={k==='.'}
                   onPress={()=>{
                     if(k==='⌫'){setPin(p=>p.slice(0,-1));setPinErr('');return;}
@@ -188,110 +250,118 @@ export function EntryDetailScreen({navigation,route}:Props) {
         </View>
       </Modal>
 
-      {/* Top bar */}
-      <View style={[s.topBar,{backgroundColor:th.card}]}>
-        <TouchableOpacity onPress={()=>navigation.goBack()} style={s.backBtn}>
-          <Text style={s.backArr}>←</Text>
-        </TouchableOpacity>
-        <Text style={[s.topTitle,{color:th.accent,fontFamily:FB}]} numberOfLines={1}>{entry.title||'Journal'}</Text>
-        <View style={s.actions}>
-          <TouchableOpacity onPress={()=>{setPinAction(entry.isPrivate?'toPublic':'toPrivate');setPinModal(true);}} style={[s.privBtn,{backgroundColor:entry.isPrivate?'#F3E5F5':'#E3EEFF'}]}>
-            <Text style={{fontSize:14}}>{entry.isPrivate?'🔒':'🔓'}</Text>
+      {/* Header — mirrors GuidedHeader from the editor exactly: back arrow +
+          date pill on top, icon + category name below. The edit/options
+          icons ride alongside the date pill since a read-only view still
+          needs a way in to those actions. */}
+      <View style={[s.header,{backgroundColor:th.bg}]}>
+        <View style={s.topRow}>
+          <TouchableOpacity onPress={()=>navigation.goBack()} activeOpacity={0.7} hitSlop={{top:10,bottom:10,left:10,right:10}}>
+            <Text style={[s.back,{color:th.accent}]}>‹</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={()=>navigation.navigate('WriteEntry',{entryId:entry.id})} style={[s.editBtn,{backgroundColor:th.accent+'20'}]}>
-            <Text style={[s.editT,{color:th.accent,fontFamily:F}]}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleDelete}><Text style={{fontSize:20}}>🗑️</Text></TouchableOpacity>
+          <View style={s.topRight}>
+            <View style={[s.datePill,{borderColor:th.accent+'40',backgroundColor:th.card}]}>
+              <CalendarLogo width={18} height={20} />
+              <Text style={[s.dateLabelT,{fontFamily:F}]}>{dateLabel}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={()=>{
+                // Morning/Night/Dream/Vent were written on the Guided/
+                // Freestyle screen — edit them there too, so Save,
+                // attachments, stickers etc. keep working exactly like they
+                // did when the entry was first created, instead of dropping
+                // into the older plain editor.
+                if (GUIDED_TYPES.has(entry.category)) {
+                  navigation.navigate('GuidedEntry', { entryId: entry.id, category: entry.category });
+                } else {
+                  navigation.navigate('WriteEntry', { entryId: entry.id });
+                }
+              }}
+              style={s.iconBtn}
+            >
+              <Text style={{fontSize:18}}>✏️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openOptions} style={s.iconBtn}>
+              <Text style={[s.moreDots,{color:th.accent}]}>•••</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        <View style={s.titleRow}>
+          {categoryIconGif ? (
+            <ExpoImage source={categoryIconGif} style={s.categoryIconGif} contentFit="contain" autoplay />
+          ) : (
+            !!categoryIcon&&<Text style={s.categoryIcon}>{categoryIcon}</Text>
+          )}
+          <Text style={[s.categoryLabel,{color:'#111',fontFamily:FB}]} numberOfLines={1}>{categoryLabel}</Text>
+        </View>
+
+        {(entry.isPrivate||entry.isImportant||entry.isFavorite)&&(
+          <View style={s.badgeRow}>
+            {entry.isFavorite&&(
+              <View style={[s.privBadge,{backgroundColor:'#FFE9E9'}]}><Text style={[s.privBadgeT,{fontFamily:FB,color:'#C2185B'}]}>♥ Favorite</Text></View>
+            )}
+            {entry.isPrivate&&(
+              <View style={s.privBadge}><Text style={[s.privBadgeT,{fontFamily:FB}]}>🔒 Private</Text></View>
+            )}
+            {entry.isImportant&&(
+              <View style={[s.privBadge,{backgroundColor:'#FFF4D6'}]}><Text style={[s.privBadgeT,{fontFamily:FB,color:'#8A6100'}]}>⭐ Pinned to Calendar</Text></View>
+            )}
+          </View>
+        )}
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Date + mood */}
-        <View style={s.dateHdr}>
-          <Text style={[s.dateDay,{color:th.accent,fontFamily:FB}]}>{date.getDate()}</Text>
-          <View style={{flex:1}}>
-            <Text style={[s.dateMonYr,{fontFamily:FB}]}>{date.toLocaleString('en',{month:'short'})} {date.getFullYear()}</Text>
-            <Text style={[s.dateWd,{fontFamily:F}]}>{date.toLocaleString('en',{weekday:'long'})} · {time}</Text>
-          </View>
-          {moodOpt&&<View style={[s.moodCirc,{backgroundColor:moodOpt.color}]}><Text style={{fontSize:22}}>{moodOpt.emoji}</Text></View>}
-        </View>
-
-        {entry.isPrivate&&(
-          <View style={s.privBadge}><Text style={[s.privBadgeT,{fontFamily:FB}]}>🔒 Private</Text></View>
-        )}
-
-        {/* Title */}
-        {!!entry.title&&(
-          <Text style={[s.title,{color:entry.textColor,fontSize:Math.max(entry.fontSize+4,22),fontFamily:FB}]}>{entry.title}</Text>
-        )}
-
-        {/* Body with highlights — matches editor layout (pad 20, stickers over body) */}
-        <View style={{marginHorizontal:20,marginBottom:10,position:'relative',minHeight:80}}>
-          <HighlightedText text={entry.body} color={entry.textColor} fs={entry.fontSize} accent={th.accent}/>
-          {/* Stickers at saved positions */}
-          {(entry.stickerPlacements??[]).map((sp:StickerPlacement)=>(
-            <View key={sp.id} style={{position:'absolute',left:sp.x,top:sp.y,transform:[{scale:sp.scale??1}],zIndex:10}}>
-              <StickerGlyph sp={sp} />
-            </View>
-          ))}
-        </View>
-
-        {/* Detected hashtags */}
-        {(entry.detectedHashtags??[]).length>0&&(
-          <View style={s.tagsRow}>
-            {(entry.detectedHashtags??[]).map((t:string)=>(
-              <View key={t} style={[s.tagChip,{backgroundColor:th.accent+'20'}]}>
-                <Text style={[s.tagT,{color:th.accent,fontFamily:F}]}>#{t}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Scribble thumbnails */}
-        {(entry.scribblePages??[]).length>0&&(
-          <View style={s.scribSection}>
-            <Text style={[s.scribLabel,{fontFamily:FB}]}>Scribbles</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {(entry.scribblePages??[]).map(pg=>(
-                <TouchableOpacity key={pg.id} style={s.scribThumb} onPress={()=>setScribPreview(pg)}>
-                  <Svg width={130} height={100}>
-                    {pg.paths.map((p:any,i:number)=>(
-                      <SvgPath key={i} d={p.d} stroke={p.color} strokeWidth={p.width}
-                        strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                    ))}
-                  </Svg>
-                  <View style={s.scribViewHint}><Text style={[{fontSize:10,color:'#888'},]}>Tap to view</Text></View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Media */}
-        {entry.mediaUrls.length>0&&(
-          <View style={s.mediaGrid}>
-            {entry.mediaUrls.map((u,i)=>{
-              const vid=isVid(u);
-              return (
-                <TouchableOpacity key={i} onPress={()=>setPreview({url:u,isVid:vid})}>
-                  {vid
-                    ?<View style={[s.mediaImg,{backgroundColor:'#111',alignItems:'center',justifyContent:'center'}]}>
-                        <Text style={{fontSize:24,color:'#FFF'}}>▶</Text>
-                        <Text style={{fontSize:9,color:'#FFF',fontFamily:F}}>VIDEO</Text>
-                      </View>
-                    :<Image source={{uri:u}} style={s.mediaImg}/>
-                  }
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+        {/* Renders through the exact same JournalCanvas component the editor
+            uses, with editable=false — mood chip, tags, the write-area card,
+            legacy attachments, freeform images and stickers all land at the
+            exact saved position/style, pixel for pixel identical to
+            GuidedEntryScreen. */}
+        <JournalCanvas
+          editable={false}
+          th={th}
+          colors={detailColors}
+          title={entry.title}
+          blocks={blocks}
+          onPressImageBlock={id => {
+            const b = blocks.find(x => x.id === id);
+            if (b?.type === 'image' && b.uri) setPreview({ url: b.uri, isVid: !!b.isVideo });
+          }}
+          scribblePages={entry.scribblePages ?? []}
+          onPressScribbleBlock={pageId => setScribPreview((entry.scribblePages ?? []).find(p => p.id === pageId))}
+          textColor={entry.textColor}
+          fontSize={entry.fontSize}
+          bold={entry.bold}
+          italic={entry.italic}
+          underline={entry.underline}
+          textAlign={entry.textAlign as any}
+          mood={entry.mood}
+          tags={entry.tags ?? []}
+          detectedHashtags={entry.detectedHashtags ?? []}
+          stickers={entry.stickerPlacements ?? []}
+          legacyAttachments={allAttachments}
+          onPressLegacyImage={uri => setPreview({ url: uri, isVid: false })}
+          onPressLegacyVideo={uri => setPreview({ url: uri, isVid: true })}
+          onPressLegacyScribble={pageId => setScribPreview((entry.scribblePages ?? []).find(p => p.id === pageId))}
+        />
 
         {/* Voice note */}
         {!!entry.voiceNoteUrl&&<VoiceWidget uri={entry.voiceNoteUrl} accent={th.accent}/>}
 
-        <View style={{height:60}}/>
+        <View style={{height:16}}/>
       </ScrollView>
+
+      {/* Previous / Next — pinned to the bottom of the screen (not part of
+          the scrolling content) so it's always reachable without scrolling
+          all the way down, like a footer bar. */}
+      <View style={[s.pager,{backgroundColor:th.card,borderTopColor:'#0000000F'}]}>
+        <TouchableOpacity onPress={goPrev} disabled={!prevEntry} style={{opacity:prevEntry?1:0.3}}>
+          <Text style={[s.pagerT,{color:th.accent,fontFamily:F}]}>‹ Previous</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={goNext} disabled={!nextEntry} style={{opacity:nextEntry?1:0.3}}>
+          <Text style={[s.pagerT,{color:th.accent,fontFamily:F}]}>Next ›</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -303,12 +373,10 @@ const vw=StyleSheet.create({
   wave:{flex:1,flexDirection:'row',alignItems:'center',gap:2,height:32},
   bar:{width:3,borderRadius:2},
 });
-const { width:SW } = require('react-native').Dimensions.get('window');
-const { height:SH } = require('react-native').Dimensions.get('window');
 const s=StyleSheet.create({
   safe:{flex:1},
   prevOver:{flex:1,backgroundColor:'rgba(0,0,0,0.95)',alignItems:'center',justifyContent:'center'},
-  prevImg:{width:SW,height:SH*0.8},
+  prevImg:{},
   prevClose:{position:'absolute',top:50,right:20,width:38,height:38,borderRadius:19,backgroundColor:'rgba(255,255,255,0.25)',alignItems:'center',justifyContent:'center'},
   prevCloseT:{fontSize:18,color:'#FFF'},
   scribPrevCard:{backgroundColor:'#FAFAFA',borderRadius:16,padding:8},
@@ -319,30 +387,33 @@ const s=StyleSheet.create({
   pinDot:{width:48,height:48,borderRadius:12,borderWidth:1.5,borderColor:'#DDD',backgroundColor:'#F5F5F5',alignItems:'center',justifyContent:'center'},
   pinStar:{color:'#FFFFFF',fontSize:26,lineHeight:30,fontWeight:'700'},
   pinErr:{fontSize:13,color:'#EF5350'},
-  pinKeypad:{flexDirection:'row',flexWrap:'wrap',width:SW-48,gap:10},
-  pinKey:{width:(SW-48-20)/3,height:56,backgroundColor:'#F5F5F5',borderRadius:14,alignItems:'center',justifyContent:'center'},
+  pinKeypad:{flexDirection:'row',flexWrap:'wrap',gap:10},
+  pinKey:{height:56,backgroundColor:'#F5F5F5',borderRadius:14,alignItems:'center',justifyContent:'center'},
   pinKeyT:{fontSize:22,color:'#111'},
   pinCancel:{fontSize:15,color:'#888'},
-  topBar:{flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:12,borderBottomWidth:0.5,borderBottomColor:'#E8E8E8',gap:8},
-  backBtn:{padding:4},backArr:{fontSize:22,color:'#111'},
-  topTitle:{flex:1,fontSize:15,color:'#111'},
-  actions:{flexDirection:'row',gap:8,alignItems:'center'},
-  privBtn:{paddingHorizontal:10,paddingVertical:6,borderRadius:12},
-  editBtn:{paddingHorizontal:14,paddingVertical:7,borderRadius:14},editT:{fontSize:14},
-  scroll:{flex:1},
-  dateHdr:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:20,paddingTop:20,marginBottom:14},
-  dateDay:{fontSize:52,lineHeight:56},
-  dateMonYr:{fontSize:18,color:'#111'},dateWd:{fontSize:13,color:'#888',marginTop:2},
-  moodCirc:{width:46,height:46,borderRadius:23,alignItems:'center',justifyContent:'center'},
-  privBadge:{backgroundColor:'#F3E5F5',borderRadius:12,paddingHorizontal:12,paddingVertical:5,alignSelf:'flex-start',marginHorizontal:20,marginBottom:10},
+  // Header — mirrors GuidedHeader.tsx exactly (back arrow + date pill on
+  // top, icon + category name below), with the pencil/••• actions riding
+  // alongside the date pill.
+  header:{paddingHorizontal:20,paddingTop:4,paddingBottom:12},
+  topRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
+  back:{fontSize:32,marginTop:-4},
+  topRight:{flexDirection:'row',alignItems:'center',gap:4},
+  datePill:{flexDirection:'row',alignItems:'center',gap:5,borderWidth:1,borderRadius:12,paddingHorizontal:12,paddingVertical:8},
+  dateLabelT:{fontSize:13,color:'#111'},
+  iconBtn:{width:38,height:38,alignItems:'center',justifyContent:'center'},
+  moreDots:{fontSize:16,fontWeight:'700',letterSpacing:1,color:'#111'},
+  titleRow:{flexDirection:'row',alignItems:'center',marginTop:8,gap:6,alignSelf:'flex-start',maxWidth:'100%'},
+  categoryIcon:{fontSize:24},
+  categoryIconGif:{width:28,height:28},
+  categoryLabel:{fontSize:22,flexShrink:1},
+  badgeRow:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},
+  privBadge:{backgroundColor:'#F3E5F5',borderRadius:12,paddingHorizontal:12,paddingVertical:5,alignSelf:'flex-start'},
   privBadgeT:{fontSize:13,color:'#7B1FA2'},
-  title:{marginHorizontal:20,marginBottom:10},
-  tagsRow:{flexDirection:'row',flexWrap:'wrap',gap:8,paddingHorizontal:20,marginBottom:12},
-  tagChip:{paddingHorizontal:10,paddingVertical:4,borderRadius:14},tagT:{fontSize:13},
-  scribSection:{paddingHorizontal:20,paddingVertical:10},
-  scribLabel:{fontSize:14,color:'#333',marginBottom:8},
-  scribThumb:{width:140,height:120,borderRadius:12,backgroundColor:'#F5F5F5',marginRight:10,overflow:'hidden',borderWidth:1,borderColor:'#E0E0E0'},
-  scribViewHint:{position:'absolute',bottom:4,left:0,right:0,alignItems:'center'},
-  mediaGrid:{flexDirection:'row',flexWrap:'wrap',gap:8,paddingHorizontal:20,marginBottom:14},
-  mediaImg:{width:150,height:120,borderRadius:12},
+  scroll:{flex:1},
+  // JournalCanvas renders flex:1 internally to fill available height (same
+  // as the editor) — flexGrow:1 here gives it an actual growth context to
+  // fill inside the ScrollView, instead of collapsing to content height.
+  scrollContent:{flexGrow:1},
+  pager:{flexDirection:'row',justifyContent:'space-between',paddingHorizontal:20,paddingTop:14,paddingBottom:14,borderTopWidth:StyleSheet.hairlineWidth},
+  pagerT:{fontSize:15},
 });

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build artifacts
+android/app/build/
+android/build/
+android/.gradle/
+ios/build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Server
+server/dist/
+server/.env
+server/firebase-service-account.json
+
+# Env / secrets
+.env
+.env.local
+*.pem
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

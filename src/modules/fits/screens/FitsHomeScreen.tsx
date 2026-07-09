@@ -12,6 +12,7 @@ import { OutfitCard }    from '../components/OutfitCard';
 import { AppText }       from '../../../shared/components/AppText';
 import { AppCard }       from '../../../shared/components/AppCard';
 import { AppEmptyState } from '../../../shared/components/AppEmptyState';
+import { AppTopNav }     from '../../../shared/components/AppTopNav';
 import { Colors }        from '../../../shared/theme/colors';
 import { Spacing, Radius, Shadows } from '../../../shared/theme/spacing';
 
@@ -78,6 +79,9 @@ export function FitsHomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Top nav — identical on every feature's home screen */}
+      <AppTopNav active="fits" />
+
       <View style={s.header}>
         <View>
           <AppText variant="headingLarge" color={Colors.textPrimary}>Fits</AppText>

@@ -7,8 +7,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/authSlice';
-import { saveUserToFirestore, getUserProfileFromFirestore } from '../services/userService';
+import { saveUserToFirestore } from '../services/userService';
 import { sendOtp as fbSendOtp, verifyOtp as fbVerifyOtp } from '../services/authService';
+import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import app, { auth } from '../../../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -25,7 +27,6 @@ const OTP_LEN = USE_REAL_OTP ? 6 : 4;
 // Responsive box sizing so the digits fit on small screens.
 const OTP_GAP = 8;
 const OTP_BOX = Math.max(40, Math.min(56, Math.floor((SW - 44 - OTP_GAP * (OTP_LEN - 1)) / OTP_LEN)));
-const RecaptchaModal: any = null;
 
 const SLIDES = [
   { img: require('../../../../assets/onboarding/circle.png'),   title: 'Your Personality, All in', accent: 'One Place.', sub: 'Add your favorites, hobbies, travel memories, books, movies, music, and circle of friends to create a profile that is uniquely yours.' },
@@ -57,7 +58,7 @@ export function OnboardingScreen({ onDone }: Props) {
   const [loading, setLoading] = useState(false);
   const [resend, setResend]   = useState(0);
   const otpRefs = useRef<Array<TextInput | null>>([]);
-  const recaptchaRef = useRef<any>(null);
+  const recaptchaRef = useRef<FirebaseRecaptchaVerifierModal>(null);
 
   const onOtpChange = (text: string, i: number) => {
     const clean = text.replace(/\D/g, '');
@@ -129,9 +130,13 @@ export function OnboardingScreen({ onDone }: Props) {
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
     if (USE_REAL_OTP) {
+      if (!recaptchaRef.current) {
+        Alert.alert('Not ready', 'Verification is still loading — try again in a moment.');
+        return;
+      }
       setLoading(true);
       try {
-        await fbSendOtp(`${cc}${digits}`);
+        await fbSendOtp(`${cc}${digits}`, recaptchaRef.current);
         setStep('otp'); setResend(29); setOtp('');
         setTimeout(() => otpRefs.current[0]?.focus(), 350);
       } catch (e: any) {
@@ -149,35 +154,39 @@ export function OnboardingScreen({ onDone }: Props) {
     setLoading(true);
     try {
       const digits = phone.replace(/\D/g, '');
-      let uid: string;
       if (USE_REAL_OTP) {
+        // 1. Confirm the SMS code with Firebase.
         const fu = await fbVerifyOtp(otp);
-        uid = fu.uid;
+        // 2. Hand the Firebase ID token to our backend, which verifies it
+        //    (Firebase Admin) and mints our own session JWT + Mongo user.
+        const idToken = await fu.getIdToken();
+        const backendUser = await exchangeFirebaseTokenForSession(idToken);
+        dispatch(loginSuccess({
+          id: backendUser.id,
+          name: backendUser.name ?? '',
+          phone: backendUser.phone || `${cc}${phone}`,
+          countryCode: backendUser.countryCode || cc,
+          avatarUrl: backendUser.avatarUrl,
+          bio: backendUser.bio,
+          createdAt: backendUser.createdAt,
+          isVerified: true,
+        }));
       } else {
         // Test mode: sign in anonymously so writes have a real auth uid.
         // Falls back to a local session if Anonymous auth isn't enabled yet.
+        let uid: string;
         try {
           const cred = await signInAnonymously(auth);
           uid = cred.user.uid;
         } catch (e) {
           uid = `demo_user_${digits || 'guest'}`;
         }
+        try { await saveUserToFirestore(uid, `${cc}${phone}`); } catch (e) { /* proceed locally */ }
+        dispatch(loginSuccess({
+          id: uid, name: '', phone: `${cc}${phone}`, countryCode: cc,
+          createdAt: new Date().toISOString(), isVerified: true,
+        }));
       }
-      let profile: any = null;
-      try {
-        await saveUserToFirestore(uid, `${cc}${phone}`);
-        profile = await getUserProfileFromFirestore(uid);
-      } catch (e) { /* proceed locally */ }
-      dispatch(loginSuccess({
-        id: uid,
-        name: profile?.name ?? '',
-        phone: `${cc}${phone}`,
-        countryCode: cc,
-        avatarUrl: profile?.avatarUrl,
-        bio: profile?.bio,
-        createdAt: profile?.createdAt ?? new Date().toISOString(),
-        isVerified: true,
-      }));
       setStep('welcome');
     } catch (e: any) {
       Alert.alert('Verification failed', e?.message ?? 'Please try again.');
@@ -199,8 +208,8 @@ export function OnboardingScreen({ onDone }: Props) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {USE_REAL_OTP && RecaptchaModal && (
-        <RecaptchaModal ref={recaptchaRef} firebaseConfig={app.options} attemptInvisibleVerification />
+      {USE_REAL_OTP && (
+        <FirebaseRecaptchaVerifierModal ref={recaptchaRef} firebaseConfig={app.options} attemptInvisibleVerification />
       )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Carousel — collapses while the keyboard is open */}

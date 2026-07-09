@@ -155,7 +155,9 @@ const s = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
-    overflow: 'hidden',
+    // No overflow:'hidden' here — this card has no image/media that needs
+    // corner-clipping, and overflow:'hidden' combined with a shadow on the
+    // same view suppresses the shadow on Android.
     ...Shadows.sm,
   },
   detailRow: {

@@ -24,6 +24,11 @@ export function MyTicketsScreen({ navigation }: ListProps) {
   const used   = myTickets.filter(t => t.status !== 'active');
 
   const renderTicket = ({ item }: { item: Ticket }) => (
+    // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
+    // inner TouchableOpacity clips the colored status strip to its rounded
+    // corners. overflow:'hidden' + a shadow on the same view suppresses the
+    // shadow on Android.
+    <View style={s.ticketRowShadowWrap}>
     <TouchableOpacity
       style={s.ticketRow}
       onPress={() => navigation.navigate('TicketDetail', { ticketId: item.id })}
@@ -54,6 +59,7 @@ export function MyTicketsScreen({ navigation }: ListProps) {
         </AppText>
       </View>
     </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -129,10 +135,17 @@ const s = StyleSheet.create({
   },
   backBtn: { width: 64 },
   list:    { padding: Spacing.base, gap: Spacing.sm },
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  ticketRowShadowWrap: {
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.bgCard,
+    ...Shadows.sm,
+  },
   ticketRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
-    overflow: 'hidden', ...Shadows.sm,
+    overflow: 'hidden',
   },
   statusStrip: { width: 5, alignSelf: 'stretch' },
   ticketInfo:  { flex: 1, padding: Spacing.base, gap: 4 },

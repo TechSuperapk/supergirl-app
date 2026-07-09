@@ -20,8 +20,12 @@ export function ClothingCard({
   item, onPress, onLongPress, selected = false, compact = false,
 }: Props) {
   return (
+    // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
+    // inner TouchableOpacity clips the image to its rounded corners.
+    // overflow:'hidden' on the SAME view as a shadow suppresses it on Android.
+    <View style={[s.cardShadowWrap, compact && s.compact]}>
     <TouchableOpacity
-      style={[s.card, compact && s.compact, selected && s.selectedCard]}
+      style={[s.card, selected && s.selectedCard]}
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.88}
@@ -80,6 +84,7 @@ export function ClothingCard({
         </View>
       )}
     </TouchableOpacity>
+    </View>
   );
 }
 
@@ -87,12 +92,18 @@ const CARD_SIZE  = 160;
 const COMPACT_SIZE = 80;
 
 const s = StyleSheet.create({
-  card: {
+  // Shadow-casting wrapper — no overflow/clipping of its own so the shadow
+  // renders fully on both iOS (shadow* props) and Android (elevation).
+  cardShadowWrap: {
     width:           CARD_SIZE,
     borderRadius:    Radius.lg,
     backgroundColor: Colors.bgCard,
-    overflow:        'hidden',
     ...Shadows.sm,
+  },
+  card: {
+    borderRadius:    Radius.lg,
+    backgroundColor: Colors.bgCard,
+    overflow:        'hidden',
   },
   compact: { width: COMPACT_SIZE },
   selectedCard: {

@@ -9,10 +9,9 @@ module.exports = function (api) {
           root: ['./src'],
           alias: {
             '@': './src',
-            // Route the JS-SDK modular imports used across the data layer to
-            // react-native-firebase at build time, so those files stay untouched.
-            'firebase/firestore': '@react-native-firebase/firestore',
-            'firebase/auth': '@react-native-firebase/auth',
+            // NOTE: firebase/* now resolves to the real Firebase JS SDK so the
+            // app runs in Expo Go. (Previously aliased to @react-native-firebase,
+            // which is a native module unavailable in Expo Go.)
           },
         },
       ],

@@ -20,7 +20,7 @@ export function SplashScreen({ onDone }: Props) {
   return (
     <View style={s.wrap}>
       <Animated.View style={{ opacity: fade, transform: [{ scale }] }}>
-        <SplashLogo width={200} height={191} />
+        <SplashLogo width={260} height={136} />
       </Animated.View>
     </View>
   );

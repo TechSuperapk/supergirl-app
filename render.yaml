@@ -1,0 +1,27 @@
+# Render Blueprint — one-click deploy for the Journal backend (server/).
+# In Render: New -> Blueprint -> pick this repo -> it reads this file automatically.
+# You'll still need to fill in the "sync: false" env vars in the Render dashboard
+# after the first deploy (Render prompts for these — it won't guess secrets).
+services:
+  - type: web
+    name: supergirl-journal-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: CLIENT_ORIGIN
+        value: "*"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false

@@ -64,7 +64,7 @@ export interface ThemeColors {
 }
 
 const LIGHT_COLORS: ThemeColors = {
-  bgApp:         '#F5F5F5',
+  bgApp:         '#FFFFFF',
   bgCard:        '#FFFFFF',
   bgInput:       '#F7F8FA',
   bgOverlay:     'rgba(0,0,0,0.45)',
@@ -153,7 +153,9 @@ const STORAGE_KEY = '@supergirl_theme';
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  // Default to light so iOS and Android look identical regardless of the OS
+  // dark-mode setting (the app design + several screens are light-only).
+  const [mode, setModeState] = useState<ThemeMode>('light');
 
   // Load persisted preference
   useEffect(() => {

@@ -1,6 +1,7 @@
 /**
- * storageUploadService — uploads local media to Firebase Storage (react-native-
- * firebase) and returns download URLs. Only URLs are stored in Firestore.
+ * storageUploadService — uploads local media to Firebase Storage (Firebase JS
+ * SDK, Expo Go compatible) and returns download URLs. Only URLs are stored in
+ * Firestore.
  *
  * Folder layout:
  *   journal-images/{uid}/...
@@ -8,7 +9,7 @@
  *   journal-audio/{uid}/...
  *   profile-images/{uid}/...
  */
-import { getStorage, ref, putFile, getDownloadURL } from '@react-native-firebase/storage';
+import { uploadLocalFile } from '../../lib/firebaseStorage';
 
 type MediaKind = 'images' | 'videos' | 'audio';
 
@@ -34,9 +35,7 @@ export async function uploadMedia(
   const fallbackExt = kind === 'images' ? 'jpg' : kind === 'videos' ? 'mp4' : 'm4a';
   const name = `${entryId}_${Date.now()}.${extOf(localUri, fallbackExt)}`;
   const path = `${FOLDER[kind]}/${uid}/${name}`;
-  const r = ref(getStorage(), path);
-  await putFile(r, localUri);
-  return getDownloadURL(r);
+  return uploadLocalFile(path, localUri);
 }
 
 /** Upload an array of media URIs, preserving order; remote URLs pass through. */
@@ -57,7 +56,5 @@ export async function uploadMany(
 export async function uploadProfileImage(uid: string, localUri: string): Promise<string> {
   if (isRemote(localUri)) return localUri;
   const path = `profile-images/${uid}/avatar_${Date.now()}.${extOf(localUri, 'jpg')}`;
-  const r = ref(getStorage(), path);
-  await putFile(r, localUri);
-  return getDownloadURL(r);
+  return uploadLocalFile(path, localUri);
 }

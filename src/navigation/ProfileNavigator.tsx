@@ -9,14 +9,15 @@ import { PrivacySettingsScreen }  from '../modules/profile/screens/PrivacySettin
 import { SubscriptionScreen }     from '../modules/profile/screens/SubscriptionScreen';
 import { HelpCenterScreen }       from '../modules/profile/screens/HelpCenterScreen';
 
-// Boards screens (Phase 6)
-import { BoardsHomeScreen }       from '../modules/boards/screens/BoardsHomeScreen';
-import { BoardDetailScreen }      from '../modules/boards/screens/BoardDetailScreen';
-import { CreateBoardScreen }      from '../modules/boards/screens/CreateBoardScreen';
-import { BoardEditorScreen }      from '../modules/boards/screens/BoardEditorScreen';
-
-// Subscription gate for Boards
-import { SubscriptionGate }       from '../shared/components/SubscriptionGate';
+// Boards (Phase 6) isn't built out yet — development is focused on Journal
+// first, so its entry point mounts the shared placeholder below instead of
+// the real screens. Swap back to the commented imports/screens once Boards
+// is ready to ship.
+// import { BoardsHomeScreen }       from '../modules/boards/screens/BoardsHomeScreen';
+// import { BoardDetailScreen }      from '../modules/boards/screens/BoardDetailScreen';
+// import { CreateBoardScreen }      from '../modules/boards/screens/CreateBoardScreen';
+// import { BoardEditorScreen }      from '../modules/boards/screens/BoardEditorScreen';
+import { UnderDevelopmentScreen } from '../shared/components/UnderDevelopmentScreen';
 
 // Backup / Restore (offline-first system)
 import { BackupSettingsScreen }   from '../backup/screens/BackupSettingsScreen';
@@ -26,13 +27,9 @@ import { ProfileStackParamList }  from './types';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
-// Wrap boards in subscription gate
-function BoardsHome(props: any) {
-  return (
-    <SubscriptionGate module="boards">
-      <BoardsHomeScreen {...props} />
-    </SubscriptionGate>
-  );
+// Boards entry point — placeholder until the module is built out (see note above).
+function BoardsHome() {
+  return <UnderDevelopmentScreen module="boards" />;
 }
 
 // Backup/Trash screens use a plain onBack prop instead of navigation props.
@@ -59,18 +56,8 @@ export function ProfileNavigator() {
       <Stack.Screen name="BackupSettings"  component={BackupSettings} />
       <Stack.Screen name="Trash"           component={Trash} />
 
-      {/* ── Boards ── */}
+      {/* Boards under development — only the placeholder entry point is mounted */}
       <Stack.Screen name="BoardsHome"   component={BoardsHome} />
-      <Stack.Screen name="BoardDetail"  component={BoardDetailScreen} />
-      <Stack.Screen name="CreateBoard"  component={CreateBoardScreen} />
-      <Stack.Screen
-        name="BoardEditor"
-        component={BoardEditorScreen}
-        options={{
-          animation:     'slide_from_bottom',
-          gestureEnabled: false,
-        }}
-      />
     </Stack.Navigator>
   );
 }
