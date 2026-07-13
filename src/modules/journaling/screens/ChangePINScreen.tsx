@@ -54,7 +54,7 @@ export function ChangePINScreen() {
   const handleSaveSecurity=()=>{
     if(!selQ1||ans1.trim().length<2){Alert.alert('Required','Please select question 1 and provide an answer.');return;}
     dispatch(setSecurityQuestions({q1:selQ1,a1:ans1,q2:selQ2,a2:ans2}));
-    if(userId) saveVaultData(userId,{pin:newPin,q1:selQ1,a1:ans1.toLowerCase().trim(),q2:selQ2,a2:ans2.toLowerCase().trim()});
+    if(userId) saveVaultData(userId,{pin:newPin,q1:selQ1,a1:ans1.toLowerCase().trim(),q2:selQ2,a2:ans2.toLowerCase().trim()}).catch(e=>console.error('saveVaultData failed:',e));
     Alert.alert('✅ Done!','PIN and security questions saved.',[{text:'OK',onPress:()=>navigation.replace('PrivateJournal')}]);
   };
 

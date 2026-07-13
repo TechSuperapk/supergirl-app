@@ -83,9 +83,17 @@ export async function saveVaultData(userId: string, data: VaultData) {
   await setDoc(ref, { ...data, userId, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
-export function subscribeToVault(userId: string, onUpdate: (data: VaultData | null) => void) {
+export function subscribeToVault(
+  userId: string,
+  onUpdate: (data: VaultData | null) => void,
+  onError?: (error: any) => void,
+) {
   const ref = doc(db, 'vaults', userId);
-  return onSnapshot(ref, (snap) => onUpdate(snap.exists() ? (snap.data() as VaultData) : null));
+  return onSnapshot(
+    ref,
+    (snap) => onUpdate(snap.exists() ? (snap.data() as VaultData) : null),
+    (error) => { console.error('subscribeToVault failed:', error); onError?.(error); },
+  );
 }
 
 export async function saveDraftToFirestore(userId: string, entry: JournalEntry) {

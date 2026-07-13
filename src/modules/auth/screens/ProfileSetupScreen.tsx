@@ -5,7 +5,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { loginSuccess } from '../store/authSlice';
 import { RootState } from '../../../store';
-import { updateUserProfileInFirestore } from '../services/userService';
+import { apiClient } from '../../../services/apiClient';
+import { BackendUser } from '../services/backendAuthService';
 import { uploadFileToFirebase } from '../../../services/storageService';
 
 const F  = 'DMSans-Regular';
@@ -35,26 +36,38 @@ export function ProfileSetupScreen({ onDone }: Props) {
     setLoading(true);
     try {
       let finalAvatarUrl = avatar;
-      
-      // If the avatar is a local file URI, upload it to Firebase Storage
+
+      // If the avatar is a local file URI, upload it to Firebase Storage.
+      // Best-effort: if the upload fails, keep going and save the name —
+      // don't let a broken photo upload block the whole profile save.
       if (avatar && !avatar.startsWith('http://') && !avatar.startsWith('https://')) {
-        const fileExt = avatar.split('.').pop() || 'jpg';
-        const storagePath = `profiles/${user.id}/avatar_${Date.now()}.${fileExt}`;
-        finalAvatarUrl = await uploadFileToFirebase(avatar, storagePath);
+        try {
+          const fileExt = avatar.split('.').pop() || 'jpg';
+          const storagePath = `profiles/${user.id}/avatar_${Date.now()}.${fileExt}`;
+          finalAvatarUrl = await uploadFileToFirebase(avatar, storagePath);
+        } catch (uploadErr) {
+          console.error('Avatar upload failed, continuing without it:', uploadErr);
+          finalAvatarUrl = user.avatarUrl ?? '';
+        }
       }
-      
-      // Update details in Firestore database
-      await updateUserProfileInFirestore(user.id, name.trim(), finalAvatarUrl || undefined);
-      
+
+      // Save via the backend (Express + Mongo) — this is the real session
+      // owner now that login goes through native Firebase Auth + our JWT,
+      // not the Firestore JS SDK.
+      const res = await apiClient.patch<{ user: BackendUser }>('/auth/me', {
+        name: name.trim(),
+        ...(finalAvatarUrl && finalAvatarUrl.startsWith('http') ? { avatarUrl: finalAvatarUrl } : {}),
+      });
+
       dispatch(loginSuccess({
         ...user,
-        name: name.trim(),
-        avatarUrl: finalAvatarUrl || undefined,
+        name: res.user.name,
+        avatarUrl: res.user.avatarUrl,
       }));
       onDone();
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Error', 'Failed to save profile details. Please try again.');
+      Alert.alert('Error', e?.message || 'Failed to save profile details. Please try again.');
     } finally {
       setLoading(false);
     }
