@@ -189,17 +189,6 @@ export function OnboardingScreen({ onDone }: Props) {
     }
   };
 
-  const skip = async () => {
-    let uid = 'guest';
-    try { const cred = await signInAnonymously(auth); uid = cred.user.uid; } catch (e) { /* ignore */ }
-    try { await saveUserToFirestore(uid, ''); } catch (e) { /* ignore */ }
-    dispatch(loginSuccess({
-      id: uid, name: '', phone: '', countryCode: cc,
-      createdAt: new Date().toISOString(), isVerified: true,
-    }));
-    doneRef.current();
-  };
-
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -226,12 +215,6 @@ export function OnboardingScreen({ onDone }: Props) {
               </View>
             ))}
           </ScrollView>
-
-          {step === 'phone' && (
-            <TouchableOpacity style={s.skip} onPress={skip} activeOpacity={0.8}>
-              <Text style={[s.skipT, { fontFamily: FM }]}>Skip</Text>
-            </TouchableOpacity>
-          )}
 
           {/* Dots */}
           <View style={s.dots}>
