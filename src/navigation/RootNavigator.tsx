@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../lib/firebase';
 import { RootState } from '../store';
-import { setOnboardingSeen, loginSuccess, logout } from '../modules/auth/store/authSlice';
+import { setOnboardingSeen } from '../modules/auth/store/authSlice';
 import { loadEntries, loadVault, loadDrafts, updateEntry } from '../modules/journaling/store/journalSlice';
-import { getUserProfileFromFirestore } from '../modules/auth/services/userService';
 import { subscribeToJournalEntries, subscribeToVault, subscribeToDrafts } from '../modules/journaling/services/journalDbService';
 import { saveBackup, getBestBackup, pushRestoredToServer } from '../modules/journaling/services/backupService';
 import { initBackupSystem, teardownBackupSystem } from '../backup';
@@ -31,24 +28,6 @@ export function RootNavigator() {
 
   const entriesRef  = useRef(entries); entriesRef.current = entries;
   const promptedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fu) => {
-      if (fu) {
-        let p: any = null;
-        try { p = await getUserProfileFromFirestore(fu.uid); } catch {}
-        dispatch(loginSuccess({
-          id: fu.uid, name: p?.name ?? fu.displayName ?? '',
-          phone: fu.phoneNumber ?? p?.phone ?? '',
-          countryCode: p?.countryCode ?? '+91', avatarUrl: p?.avatarUrl,
-          bio: p?.bio, createdAt: p?.createdAt ?? new Date().toISOString(), isVerified: true,
-        }));
-      } else {
-        if (user && !user.id.startsWith('demo_user_')) { dispatch(logout()); dispatch(loadEntries([])); }
-      }
-    });
-    return () => unsub();
-  }, [dispatch, user]);
 
   // Offline-first journals: hydrate from the local store instantly, then start
   // the background sync. The realtime subscription merges server data with any
