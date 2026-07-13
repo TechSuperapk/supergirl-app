@@ -9,6 +9,7 @@ import {setVaultPin,setSecurityQuestions} from '../store/journalSlice';
 import {PrivateStackParamList} from '../../../navigation/PrivateNavigator';
 import {saveVaultData} from '../services/journalDbService';
 import {SECURITY_QUESTIONS} from '../types';
+import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const C={blue:'#2979FF',bg:'#F2F2F7',white:'#FFFFFF',black:'#111111',grey:'#666',lgrey:'#CCCCCC',red:'#EF5350',green:'#4CAF50'};
 const KEYS=['1','2','3','4','5','6','7','8','9','.','0','⌫'];
@@ -99,7 +100,7 @@ export function ChangePINScreen() {
               <Text style={s.qTitle}>Security Question 1 (Required)</Text>
               <TouchableOpacity style={s.questionBtn} onPress={()=>setShowQ1(v=>!v)}>
                 <Text style={selQ1?s.questionTxt:s.questionPlaceholder} numberOfLines={2}>{selQ1||'Select a question...'}</Text>
-                <Text style={s.questionCaret}>▾</Text>
+                <DropdownIcon style={{marginLeft:6}}/>
               </TouchableOpacity>
               {showQ1&&<View style={s.dropdown}>{SECURITY_QUESTIONS.filter(q=>q!==selQ2).map(q=><TouchableOpacity key={q} style={[s.dropItem,selQ1===q&&s.dropItemActive]} onPress={()=>{setSelQ1(q);setShowQ1(false);}}><Text style={[s.dropTxt,selQ1===q&&{color:C.blue}]}>{q}</Text></TouchableOpacity>)}</View>}
               <View style={s.answerBox}><Text style={s.answerLabel}>Answer</Text><TextInput style={s.answerInput} placeholder="Type your answer..." placeholderTextColor={C.lgrey} value={ans1} onChangeText={setAns1} autoCapitalize="none"/></View>
@@ -107,7 +108,7 @@ export function ChangePINScreen() {
               <Text style={s.qTitle}>Security Question 2 (Optional)</Text>
               <TouchableOpacity style={s.questionBtn} onPress={()=>setShowQ2(v=>!v)}>
                 <Text style={selQ2?s.questionTxt:s.questionPlaceholder} numberOfLines={2}>{selQ2||'Select a question...'}</Text>
-                <Text style={s.questionCaret}>▾</Text>
+                <DropdownIcon style={{marginLeft:6}}/>
               </TouchableOpacity>
               {showQ2&&<View style={s.dropdown}>{SECURITY_QUESTIONS.filter(q=>q!==selQ1).map(q=><TouchableOpacity key={q} style={[s.dropItem,selQ2===q&&s.dropItemActive]} onPress={()=>{setSelQ2(q);setShowQ2(false);}}><Text style={[s.dropTxt,selQ2===q&&{color:C.blue}]}>{q}</Text></TouchableOpacity>)}</View>}
               {selQ2&&<View style={s.answerBox}><Text style={s.answerLabel}>Answer</Text><TextInput style={s.answerInput} placeholder="Type your answer..." placeholderTextColor={C.lgrey} value={ans2} onChangeText={setAns2} autoCapitalize="none"/></View>}

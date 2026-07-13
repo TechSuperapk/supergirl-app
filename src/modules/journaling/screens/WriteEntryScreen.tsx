@@ -382,7 +382,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
             <TouchableOpacity style={s.dateLeft} onPress={()=>tp('calendar')}>
               <Text style={[s.dateDay,{color:th.accent,fontFamily:FB}]}>{date.getDate()}</Text>
               <Text style={[s.dateMon,{color:th.accent,fontFamily:F}]}>
-                {' '}{date.toLocaleString('en',{month:'long'})} {date.getFullYear()} ▾
+                {' '}{date.toLocaleString('en',{month:'long'})} {date.getFullYear()}
               </Text>
             </TouchableOpacity>
             {/* Mood emoji — tap to change */}

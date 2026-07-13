@@ -68,20 +68,12 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-font",
-      "expo-audio",
-      "expo-video",
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
           "color": "#2979FF",
           "iosDisplayInForeground": true
-        }
-      ],
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "Allow SuperGirl to use Face ID for your private vault."
         }
       ],
       [

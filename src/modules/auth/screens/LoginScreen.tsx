@@ -8,6 +8,7 @@ import { useDispatch }    from 'react-redux';
 import { loginSuccess }   from '../store/authSlice';
 import { sendOtp, verifyOtp } from '../services/authService';
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
+import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const F  = 'DMSans-Regular';
 const FB = 'DMSans-Bold';
@@ -195,7 +196,8 @@ export function LoginScreen({ onLogin }: Props) {
             <Text style={[s.label, { fontFamily: F }]}>Phone Number</Text>
             <View style={s.phoneRow}>
               <TouchableOpacity style={s.ccBtn} onPress={() => setShowCC(v => !v)}>
-                <Text style={[s.ccTxt, { fontFamily: F }]}>{selCC.flag} {cc} ▾</Text>
+                <Text style={[s.ccTxt, { fontFamily: F }]}>{selCC.flag} {cc}</Text>
+                <DropdownIcon style={{ marginLeft: 6 }} />
               </TouchableOpacity>
               <TextInput
                 style={[s.phoneInput, { fontFamily: F }]}
@@ -260,7 +262,7 @@ const s = StyleSheet.create({
   label:       { fontSize: 13, color: '#555' },
   input:       { borderWidth: 1.5, borderColor: '#E0E0E0', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111', backgroundColor: '#FAFAFA' },
   phoneRow:    { flexDirection: 'row', gap: 10 },
-  ccBtn:       { borderWidth: 1.5, borderColor: '#E0E0E0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#FAFAFA', justifyContent: 'center' },
+  ccBtn:       { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E0E0E0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#FAFAFA', justifyContent: 'center' },
   ccTxt:       { fontSize: 14, color: '#111' },
   phoneInput:  { flex: 1, borderWidth: 1.5, borderColor: '#E0E0E0', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111', backgroundColor: '#FAFAFA' },
   ccDropdown:  { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },

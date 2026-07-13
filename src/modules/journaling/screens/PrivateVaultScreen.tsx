@@ -8,6 +8,7 @@ import { RootState }               from '../../../store';
 import { unlockVault, setVaultPin, setSecurityQuestions } from '../store/journalSlice';
 import { PrivateStackParamList }   from '../../../navigation/PrivateNavigator';
 import { saveVaultData } from '../services/journalDbService';
+import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const C  = { blue:'#2979FF', bg:'#F2F2F7', white:'#FFFFFF', black:'#111111', grey:'#888888' };
 const F  = 'DMSans-Regular';
@@ -127,7 +128,7 @@ export function PrivateVaultScreen() {
 
           <TouchableOpacity style={s.questionBtn} onPress={()=>setShowQPicker(v=>!v)}>
             <Text style={[s.questionBtnT,{fontFamily:F}]} numberOfLines={2}>{secQ}</Text>
-            <Text style={{fontSize:16}}>▾</Text>
+            <DropdownIcon />
           </TouchableOpacity>
 
           {showQPicker && (

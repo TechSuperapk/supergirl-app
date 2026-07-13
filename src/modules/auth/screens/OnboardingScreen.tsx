@@ -12,6 +12,7 @@ import { sendOtp as fbSendOtp, verifyOtp as fbVerifyOtp } from '../services/auth
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
 import { auth } from '../../../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
+import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const { width: SW } = Dimensions.get('window');
 const F  = 'DMSans-Regular';
@@ -233,7 +234,8 @@ export function OnboardingScreen({ onDone }: Props) {
               <Text style={[s.panelSub, { fontFamily: F }]}>Get started & grab best offers on top brands!</Text>
               <View style={s.phoneRow}>
                 <TouchableOpacity style={s.ccBtn} onPress={() => setShowCC(v => !v)} activeOpacity={0.8}>
-                  <Text style={[s.ccTxt, { fontFamily: FM }]}>{selCC.flag} {cc}  ▾</Text>
+                  <Text style={[s.ccTxt, { fontFamily: FM }]}>{selCC.flag} {cc}</Text>
+                  <DropdownIcon style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
                 <TextInput
                   style={[s.phoneInput, { fontFamily: F }]}
@@ -342,7 +344,7 @@ const s = StyleSheet.create({
   panelTitle:  { fontSize: 20, color: '#111', textAlign: 'center' },
   panelSub:    { fontSize: 13, color: '#8A8F98', textAlign: 'center', marginTop: 4, marginBottom: 18 },
   phoneRow:    { flexDirection: 'row', gap: 10 },
-  ccBtn:       { borderWidth: 1.5, borderColor: '#E5E8EC', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: '#FFF' },
+  ccBtn:       { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E8EC', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: '#FFF' },
   ccTxt:       { fontSize: 15, color: '#111' },
   phoneInput:  { flex: 1, borderWidth: 1.5, borderColor: '#E5E8EC', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: '#111', backgroundColor: '#FFF' },
   ccDropdown:  { borderWidth: 1, borderColor: '#E5E8EC', borderRadius: 12, backgroundColor: '#FFF', marginTop: 8, overflow: 'hidden' },
