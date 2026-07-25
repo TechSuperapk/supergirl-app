@@ -43,9 +43,9 @@ export const IMAGE_BASE_WIDTH = 160;
 // natural reading order of the text instead of anywhere on the canvas.
 export interface ContentBlock {
   id: string;
-  type: 'text' | 'image' | 'scribble';
+  type: 'text' | 'image' | 'scribble' | 'audio';
   text?: string;      // for type 'text'
-  uri?: string;       // for type 'image'
+  uri?: string;       // for type 'image' and 'audio' (local file:// or remote url)
   isVideo?: boolean;  // for type 'image' — video vs photo
   pageId?: string;    // for type 'scribble' — id into the entry's scribblePages
 }
@@ -81,7 +81,12 @@ export interface JournalEntry {
   mood: Mood;
   tags: string[];        // manually added chips
   mediaUrls: string[];
+  /** Legacy single voice note — kept readable for entries saved before
+   *  multi-recording support. New writes fill voiceNoteUrls and mirror the
+   *  first clip here so older builds/readers keep working. */
   voiceNoteUrl?: string;
+  /** All voice notes, in recorded order. */
+  voiceNoteUrls?: string[];
   stickers: string[];
   stickerPlacements: StickerPlacement[];
   scribblePages: ScribblePage[];
@@ -92,6 +97,13 @@ export interface JournalEntry {
    *  the Recent Journal card. Older entries won't have this set, and simply
    *  show no pill. */
   mode?: 'freestyle' | 'guided';
+  /** Structured snapshot of every guided-flow answer (emotions, gratitude,
+   *  to-dos, affirmations, triggers, dream details, per-question answers…).
+   *  `body` is only a flattened "Label: answer" rendering of these, which
+   *  can't be parsed back reliably — so this is what the editor rehydrates
+   *  from when you re-open a saved guided journal. Entries written before
+   *  this existed simply have no snapshot and fall back to `body`. */
+  guidedData?: Record<string, any>;
   textColor: string;
   fontSize: number;
   /** Rich-text styling for the body — applied live in the editor and

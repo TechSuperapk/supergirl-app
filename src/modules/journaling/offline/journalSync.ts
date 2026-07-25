@@ -29,7 +29,9 @@ export function pendingCount(): number { return Pending.count(); }
 
 const isRemote = (u: string) => /^https?:\/\//i.test(u);
 const hasLocalMedia = (e: JournalEntry) =>
-  (e.mediaUrls ?? []).some(u => !isRemote(u)) || (!!e.voiceNoteUrl && !isRemote(e.voiceNoteUrl));
+  (e.mediaUrls ?? []).some(u => !isRemote(u)) ||
+  (e.voiceNoteUrls ?? []).some(u => !isRemote(u)) ||
+  (!!e.voiceNoteUrl && !isRemote(e.voiceNoteUrl));
 
 async function uploadEntryMedia(u: string, entry: JournalEntry): Promise<JournalEntry> {
   const mediaUrls: string[] = [];
@@ -41,15 +43,25 @@ async function uploadEntryMedia(u: string, entry: JournalEntry): Promise<Journal
       mediaUrls.push(await uploadFileToFirebase(uri, path));
     } catch { mediaUrls.push(uri); } // keep local URI, retry next cycle
   }
-  let voiceNoteUrl = entry.voiceNoteUrl;
-  if (voiceNoteUrl && !isRemote(voiceNoteUrl)) {
+  // Upload every voice clip (multi-recording support) — keep local URIs on
+  // failure so they're retried next cycle.
+  const uploadVoice = async (uri: string): Promise<string> => {
+    if (isRemote(uri)) return uri;
     try {
-      const ext = voiceNoteUrl.split('.').pop() || 'm4a';
-      const path = `journal_media/${u}/${entry.id}/voice_${Date.now()}.${ext}`;
-      voiceNoteUrl = await uploadFileToFirebase(voiceNoteUrl, path);
-    } catch { /* keep local URI */ }
-  }
-  return { ...entry, mediaUrls, voiceNoteUrl };
+      const ext = uri.split('.').pop() || 'm4a';
+      const path = `journal_media/${u}/${entry.id}/voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+      return await uploadFileToFirebase(uri, path);
+    } catch { return uri; }
+  };
+  const voiceNoteUrls = entry.voiceNoteUrls?.length
+    ? await Promise.all(entry.voiceNoteUrls.map(uploadVoice))
+    : entry.voiceNoteUrls;
+  // Legacy single field: mirror the first clip if the array exists,
+  // otherwise upload it standalone (pre-migration entries).
+  const voiceNoteUrl = voiceNoteUrls?.length
+    ? voiceNoteUrls[0]
+    : entry.voiceNoteUrl ? await uploadVoice(entry.voiceNoteUrl) : entry.voiceNoteUrl;
+  return { ...entry, mediaUrls, voiceNoteUrl, voiceNoteUrls };
 }
 
 async function isOnline(): Promise<boolean> {

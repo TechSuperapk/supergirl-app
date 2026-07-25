@@ -32,6 +32,7 @@ export { StickerPickerSheet } from './StickerPickerSheet';
 export { TagPickerSheet }   from './TagPickerSheet';
 export { AttachTooltip }    from './AttachTooltip';
 export { AttachmentGrid }   from './AttachmentGrid';
+export { GuidedPreview }    from './GuidedPreview';
 export { JournalCanvas }    from './JournalCanvas';
 export type { JournalCanvasProps, TextAlignH } from './JournalCanvas';
 export { WeatherPickerSheet } from './WeatherPickerSheet';

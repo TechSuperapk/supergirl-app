@@ -6,6 +6,7 @@ import { AppText }   from './AppText';
 import { AppButton } from './AppButton';
 import { Colors }    from '../theme/colors';
 import { Spacing }   from '../theme/spacing';
+import { recordError, logBreadcrumb } from '../../lib/crashReporting';
 
 interface Props   { children: React.ReactNode; fallback?: React.ReactNode }
 interface State   { hasError: boolean; error: Error | null }
@@ -22,7 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary] Caught error:', error, info);
-    // In production: send to Sentry / Crashlytics here
+    if (info.componentStack) logBreadcrumb(`componentStack: ${info.componentStack.slice(0, 1000)}`);
+    recordError(error, 'ErrorBoundary');
   }
 
   reset = () => this.setState({ hasError: false, error: null });

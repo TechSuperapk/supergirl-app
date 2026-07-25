@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { RootState } from '../../../store';
 import { saveDraft, deleteDraft } from '../store/journalSlice';
 import { JournalStackParamList } from '../../../navigation/JournalNavigator';
@@ -25,7 +25,8 @@ import {
   JournalEntry, JournalTheme, Mood, MOOD_OPTIONS, JOURNAL_THEMES,
   StickerPlacement, ContentBlock, detectHashtags,
 } from '../types';
-import { blocksFromEntry, bodyFromBlocks, newTextBlock, newImageBlock, newScribbleBlock } from '../contentBlocks';
+import { blocksFromEntry, bodyFromBlocks, newTextBlock, newImageBlock, newScribbleBlock, newAudioBlock } from '../contentBlocks';
+import { RecordingWidget } from '../components/VoiceWidgets';
 import { mergeAttachments } from '../attachmentOrder';
 import { useOfflineJournal } from '../offline/useOfflineJournal';
 import { promptsFor } from '../guidedPrompts';
@@ -43,6 +44,8 @@ import {
   DREAM_EMOTIONS, NIGHT_MOODS, TRIGGERS, NEEDS, PLACES, DREAM_DETAILS, AFFIRMATIONS,
   ChipDef,
 } from '../components/guided';
+import { EntryThemeContext } from '../components/guided/entryTheme';
+import AttachmentIcon from '../components/AttachmentIcon';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'GuidedEntry'>;
 const gid = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -50,7 +53,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const SUBTITLE: Record<string, string> = {
   dream:   'Capture your dreams before they fade away ✨',
-  morning: 'Start your day with clarity and intention.',
+  morning: 'Start your day with clarity.',
   night:   'Wind down and reflect on your day.',
   vent:    'Let it all out — this space is yours.',
 };
@@ -74,6 +77,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
   const existing = routeEntryId
     ? (allEntries.find(e => e.id === routeEntryId) ?? allDrafts.find(d => d.id === routeEntryId))
     : undefined;
+
+  // Structured guided answers saved with the entry. `body` is only a
+  // flattened rendering of these and can't be parsed back, so re-opening a
+  // saved guided journal rehydrates every question from here.
+  const g: Record<string, any> = existing?.guidedData ?? {};
 
   // Stable id, generated once, so the Scribble pad and any draft snapshot
   // both refer to the same in-progress entry before it's actually saved —
@@ -129,21 +137,28 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
 
   // ── shared field state — hydrated from `existing` when editing ──
   const [title, setTitle]         = useState(existing?.title ?? '');
-  const [emotions, setEmotions]   = useState<string[]>([]);
-  const [mainText, setMainText]   = useState(existing?.body ?? '');       // describe / gratitude
-  const [notes, setNotes]         = useState('');
-  const [clips, setClips]         = useState<AudioClip[]>(existing?.voiceNoteUrl ? [{ id: gid(), uri: existing.voiceNoteUrl }] : []);
-  const [people, setPeople]       = useState<string[]>([]);
-  const [symbols, setSymbols]     = useState<string[]>([]);
-  const [intensity, setIntensity] = useState(5);
+  const [emotions, setEmotions]   = useState<string[]>(g.emotions ?? []);
+  // Prefer the structured snapshot; fall back to `body` for entries saved
+  // before guidedData existed (and for Freestyle, where body IS the text).
+  const [mainText, setMainText]   = useState<string>(g.mainText ?? existing?.body ?? '');
+  const [notes, setNotes]         = useState<string>(g.notes ?? '');
+  // All voice clips — hydrates from the new voiceNoteUrls array, falling
+  // back to the legacy single voiceNoteUrl for older entries.
+  const [clips, setClips]         = useState<AudioClip[]>(
+    (existing?.voiceNoteUrls ?? (existing?.voiceNoteUrl ? [existing.voiceNoteUrl] : [])).map(uri => ({ id: gid(), uri }))
+  );
+  const [people, setPeople]       = useState<string[]>(g.people ?? []);
+  const [symbols, setSymbols]     = useState<string[]>(g.symbols ?? []);
+  const [intensity, setIntensity] = useState<number>(g.intensity ?? 5);
 
   // ── custom ("+ Add your own") chips per picker, kept separate so keys
   // never collide between different question cards ──
-  const [customFeelings, setCustomFeelings]   = useState<ChipDef[]>([]);
-  const [customTriggers, setCustomTriggers]   = useState<ChipDef[]>([]);
-  const [customPlaces, setCustomPlaces]       = useState<ChipDef[]>([]);
-  const [customSymbols, setCustomSymbols]     = useState<ChipDef[]>([]);
-  const [customAffirmations, setCustomAffirmations] = useState<ChipDef[]>([]);
+  const [customFeelings, setCustomFeelings]   = useState<ChipDef[]>(g.customFeelings ?? []);
+  const [customTriggers, setCustomTriggers]   = useState<ChipDef[]>(g.customTriggers ?? []);
+  const [customPlaces, setCustomPlaces]       = useState<ChipDef[]>(g.customPlaces ?? []);
+  const [customSymbols, setCustomSymbols]     = useState<ChipDef[]>(g.customSymbols ?? []);
+  const [customAffirmations, setCustomAffirmations] = useState<ChipDef[]>(g.customAffirmations ?? []);
+  const [customPeople, setCustomPeople]       = useState<ChipDef[]>(g.customPeople ?? []);
   const addCustomChip = (set: React.Dispatch<React.SetStateAction<ChipDef[]>>, selectSet: React.Dispatch<React.SetStateAction<string[]>>) =>
     (label: string) => {
       set(p => [...p, { key: label, label, emoji: '' }]);
@@ -151,27 +166,40 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
     };
 
   // ── Morning ──
-  const [manifestation, setManifestation] = useState('');
-  const [todos, setTodos] = useState<TaskItem[]>([{ text: '', done: false }, { text: '', done: false }, { text: '', done: false }]);
-  const [affirmations, setAffirmations] = useState<string[]>([]);
+  const [manifestation, setManifestation] = useState<string>(g.manifestation ?? '');
+  const [todos, setTodos] = useState<TaskItem[]>(g.todos ?? [{ text: '', done: false }, { text: '', done: false }, { text: '', done: false }]);
+  const [affirmations, setAffirmations] = useState<string[]>(g.affirmations ?? []);
+  // Special-journal hashtags the person creates themselves (added to `tags`).
+  const [customHashtags, setCustomHashtags] = useState<string[]>(g.customHashtags ?? []);
+  const [addingHash, setAddingHash] = useState(false);
+  const [hashDraft, setHashDraft] = useState('');
+  const addHashtag = () => {
+    const clean = hashDraft.trim().replace(/^#/, '').replace(/\s+/g, '');
+    if (clean) {
+      setCustomHashtags(p => (p.includes(clean) ? p : [...p, clean]));
+      setTags(p => (p.includes(clean) ? p : [...p, clean]));
+    }
+    setHashDraft('');
+    setAddingHash(false);
+  };
 
   // ── Night ──
-  const [gratitudeTexts, setGratitudeTexts] = useState<string[]>(['', '', '']);
-  const [gratitudeTasks, setGratitudeTasks] = useState<TaskItem[]>([{ text: '', done: false }, { text: '', done: false }, { text: '', done: false }]);
+  const [gratitudeTexts, setGratitudeTexts] = useState<string[]>(g.gratitudeTexts ?? ['', '', '']);
+  const [gratitudeTasks, setGratitudeTasks] = useState<TaskItem[]>(g.gratitudeTasks ?? [{ text: '', done: false }, { text: '', done: false }, { text: '', done: false }]);
 
   // ── Vent ──
-  const [triggers, setTriggers] = useState<string[]>([]);
-  const [needs, setNeeds]       = useState<string[]>([]);
+  const [triggers, setTriggers] = useState<string[]>(g.triggers ?? []);
+  const [needs, setNeeds]       = useState<string[]>(g.needs ?? []);
 
   // ── Dream ──
-  const [dreamDetails, setDreamDetails] = useState<string[]>([]);
-  const [dreamPlaces, setDreamPlaces]   = useState<string[]>([]);
+  const [dreamDetails, setDreamDetails] = useState<string[]>(g.dreamDetails ?? []);
+  const [dreamPlaces, setDreamPlaces]   = useState<string[]>(g.dreamPlaces ?? []);
   // Defaults to public (not private) — the Home/Journal lists only show
   // entries where isPrivate is false, and there's no toggle in this screen
   // to flip it, so defaulting to true here would make every new journal
   // silently vanish from Recents right after saving.
   const [priv, setPriv]           = useState(existing?.isPrivate ?? false);
-  const [answers, setAnswers]     = useState<Record<string, string>>({});
+  const [answers, setAnswers]     = useState<Record<string, string>>(g.answers ?? {});
 
   // ── Freestyle extras: stickers, text style, media, tags, scribbles ──
   const [stickers, setStickers]   = useState<StickerPlacement[]>(existing?.stickerPlacements ?? []);
@@ -225,6 +253,16 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
   const prompts = useMemo(() => promptsFor(category), [category]);
   const toggle = (arr: string[], set: (v: string[]) => void, k: string) =>
     set(arr.includes(k) ? arr.filter(x => x !== k) : [...arr, k]);
+  // Feeling picker is single-select (like the mood emoji) — tapping a chip
+  // replaces the current pick; tapping the same one clears it.
+  const selectSingle = (arr: string[], set: (v: string[]) => void, k: string) =>
+    set(arr.includes(k) ? [] : [k]);
+  // Adding a custom feeling chip in single-select mode makes it THE selection.
+  const addCustomChipSingle = (set: React.Dispatch<React.SetStateAction<ChipDef[]>>, selectSet: React.Dispatch<React.SetStateAction<string[]>>) =>
+    (label: string) => {
+      set(p => [...p, { key: label, label, emoji: '' }]);
+      selectSet([label]);
+    };
 
   const labelsOf = (defs: { key: string; label: string }[], keys: string[]) =>
     defs.filter(d => keys.includes(d.key)).map(d => d.label).join(', ');
@@ -368,6 +406,64 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
   const onPressImageBlock = (id: string) => {
     const b = blocks.find(x => x.id === id);
     if (b?.type === 'image' && b.uri) setImagePreview({ url: b.uri, isVid: !!b.isVideo });
+  };
+
+  // ── Inline voice notes (freestyle) — record like WhatsApp/Telegram, drop the
+  // clip in at the cursor, play it back any time, add as many as you like. ──
+  const [freeRecording, setFreeRecording] = useState(false);
+  const freeRecRef = useRef<Audio.Recording | null>(null);
+
+  const insertAudioAtCursor = (uri: string) => {
+    setBlocks(bs => {
+      const targetId = focusedBlockId ?? [...bs].reverse().find(b => b.type === 'text')?.id;
+      const idx = targetId ? bs.findIndex(b => b.id === targetId) : -1;
+      const audioBlock = newAudioBlock(uri);
+      if (idx === -1) return [...bs, audioBlock, newTextBlock()];
+      const beforeBlock: ContentBlock = { ...bs[idx], text: bs[idx].text ?? '' };
+      const afterBlock = newTextBlock('');
+      const next = [...bs];
+      next.splice(idx, 1, beforeBlock, audioBlock, afterBlock);
+      requestAnimationFrame(() => { setFocusedBlockId(afterBlock.id); blockRefs.current.get(afterBlock.id)?.focus(); });
+      return next;
+    });
+  };
+
+  const startFreeRec = async () => {
+    try {
+      const p = await Audio.requestPermissionsAsync();
+      if (!p.granted) { Alert.alert('Microphone needed', 'Allow microphone access to record a voice note.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      freeRecRef.current = recording;
+      setFreeRecording(true);
+    } catch { Alert.alert('Recording failed', 'Could not start recording.'); }
+  };
+
+  const stopFreeRec = async () => {
+    const r = freeRecRef.current;
+    freeRecRef.current = null;
+    setFreeRecording(false);
+    if (!r) return;
+    try {
+      await r.stopAndUnloadAsync();
+      const uri = r.getURI();
+      if (uri) insertAudioAtCursor(uri);
+    } catch { Alert.alert('Recording failed', 'The recording was interrupted.'); }
+  };
+
+  const toggleFreeRec = () => { if (freeRecording) stopFreeRec(); else startFreeRec(); };
+
+  const onDeleteAudioBlock = (id: string) => {
+    setBlocks(bs => {
+      const idx = bs.findIndex(b => b.id === id);
+      if (idx === -1) return bs;
+      const prev = bs[idx - 1]; const next = bs[idx + 1];
+      if (prev?.type === 'text' && next?.type === 'text') {
+        const merged: ContentBlock = { ...prev, text: `${prev.text ?? ''}${next.text ?? ''}` };
+        const out = [...bs]; out.splice(idx - 1, 3, merged); return out;
+      }
+      return bs.filter(b => b.id !== id);
+    });
   };
 
   // ── scribble — same "drop in below whatever's typed, fresh block opens
@@ -538,7 +634,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
     const now = new Date().toISOString();
     return {
       id: eid, title: title.trim() || headerTitle, body, detectedHashtags: detectHashtags(body), mood: finalMood,
-      tags, mediaUrls: media, voiceNoteUrl: clips[0]?.uri,
+      tags, mediaUrls: media,
+      // ALL clips are saved now (voiceNoteUrls); voiceNoteUrl mirrors the
+      // first one for older readers. Previously only clips[0] survived.
+      voiceNoteUrls: clips.length ? clips.map(c => c.uri) : undefined,
+      voiceNoteUrl: clips[0]?.uri,
       stickers: stickers.map(sp => sp.asset ?? sp.emoji ?? ''), stickerPlacements: stickers,
       // contentBlocks is only meaningful for entries actually written on the
       // Freestyle canvas — Guided-mode saves leave it undefined so the view
@@ -551,6 +651,18 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
       isPrivate: priv, isImportant: important, theme, category: category as any,
       textColor, fontSize, createdAt: date.toISOString(), updatedAt: now, isDraft,
       mode: variant !== 'simple' ? mode : 'guided',
+      // Structured snapshot of every guided answer, so re-opening this entry
+      // to edit restores the exact same content instead of blank sections
+      // (`body` above is only a flattened, unparseable rendering of these).
+      guidedData: {
+        mainText, notes, emotions, people, symbols, intensity,
+        manifestation, todos, affirmations,
+        gratitudeTexts, gratitudeTasks,
+        triggers, needs,
+        dreamDetails, dreamPlaces,
+        answers,
+        customFeelings, customTriggers, customPlaces, customSymbols, customAffirmations, customHashtags, customPeople,
+      },
     };
   };
 
@@ -597,7 +709,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
   );
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: colors.bgApp }]} edges={['top', 'bottom']}>
+    // Journal theme paints the screen immediately on selection — background,
+    // and (via EntryThemeContext) every section card too, so no white space is
+    // left. 'default' falls back to the app colours so light/dark still works.
+    <EntryThemeContext.Provider value={theme === 'default' ? null : { card: th.card, border: th.accent + '33', accent: th.accent }}>
+    <SafeAreaView style={[s.safe, { backgroundColor: theme === 'default' ? colors.bgApp : th.bg }]} edges={['top', 'bottom']}>
       <GuidedHeader
         title={headerTitle}
         subtitle={subtitle}
@@ -606,8 +722,8 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
         onBack={() => navigation.goBack()}
         onPressTitle={() => setTypeSheetVisible(true)}
         onPressDate={() => setCalendarVisible(true)}
-        rightSlot={mode === 'freestyle' && variant !== 'simple' ? (
-          <TouchableOpacity style={[s.topSaveBtn, { backgroundColor: colors.textPrimary }]} activeOpacity={0.85} onPress={onSave}>
+        rightSlot={variant !== 'simple' ? (
+          <TouchableOpacity style={[s.topSaveBtn, { backgroundColor: theme === 'default' ? colors.textPrimary : th.accent }]} activeOpacity={0.85} onPress={onSave}>
             <AppText variant="button" color={colors.bgCard}>{saveLabel}</AppText>
           </TouchableOpacity>
         ) : undefined}
@@ -631,7 +747,7 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.scrollContent}
+          contentContainerStyle={[s.scrollContent, mode === 'guided' && variant !== 'simple' && { paddingBottom: 100 }]}
           keyboardShouldPersistTaps="handled"
           scrollEnabled={!canvasActive}
         >
@@ -656,6 +772,7 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
               onSelectionChangeBlock={onSelectionChangeBlock}
               blockRefs={blockRefs}
               onDeleteImageBlock={onDeleteImageBlock}
+              onDeleteAudioBlock={onDeleteAudioBlock}
               onPressImageBlock={onPressImageBlock}
               scribblePages={scribblePages}
               onPressScribbleBlock={onPressScribbleBlock}
@@ -704,11 +821,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                 <VoiceTextArea value={mainText} onChange={setMainText} placeholder="Type here or Tap the mic to speak…" clips={clips} onChangeClips={setClips} />
               </SectionCard>
 
-              <SectionCard title="How did you feel?" subtitle="Select all that apply.">
+              <SectionCard title="How did you feel?" subtitle="Pick the one that fits best.">
                 <ChipMultiSelectAdd
                   options={DREAM_EMOTIONS} extra={customFeelings}
-                  selected={emotions} onToggle={k => toggle(emotions, setEmotions, k)}
-                  onAddCustom={addCustomChip(setCustomFeelings, setEmotions)}
+                  selected={emotions} onToggle={k => selectSingle(emotions, setEmotions, k)}
+                  onAddCustom={addCustomChipSingle(setCustomFeelings, setEmotions)}
                 />
               </SectionCard>
 
@@ -725,8 +842,16 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                 />
               </SectionCard>
 
-              <SectionCard title="People In Dream" subtitle="Who was in your dream?" action="+Add">
-                <PeopleGrid options={PEOPLE} selected={people} onToggle={k => toggle(people, setPeople, k)} />
+              <SectionCard title="People In Dream" subtitle="Who was in your dream?">
+                <PeopleGrid
+                  options={[...PEOPLE, ...customPeople]}
+                  selected={people}
+                  onToggle={k => toggle(people, setPeople, k)}
+                  onAddPerson={name => {
+                    setCustomPeople(p => (p.some(x => x.key === name) ? p : [...p, { key: name, label: name, emoji: '🧑' }]));
+                    setPeople(p => (p.includes(name) ? p : [...p, name]));
+                  }}
+                />
               </SectionCard>
 
               <SectionCard title="What symbols stood out in your dream?" subtitle="Select all that apply">
@@ -742,11 +867,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
 
           {mode === 'guided' && category === 'morning' && (
             <>
-              <SectionCard title="How are you feeling this morning?" subtitle="Pick words that best describe how you feel.">
+              <SectionCard title="How are you feeling this morning?" subtitle="Pick the one that best describes how you feel.">
                 <ChipMultiSelectAdd
                   options={EMOTIONS} extra={customFeelings}
-                  selected={emotions} onToggle={k => toggle(emotions, setEmotions, k)}
-                  onAddCustom={addCustomChip(setCustomFeelings, setEmotions)}
+                  selected={emotions} onToggle={k => selectSingle(emotions, setEmotions, k)}
+                  onAddCustom={addCustomChipSingle(setCustomFeelings, setEmotions)}
                 />
               </SectionCard>
 
@@ -754,8 +879,8 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                 <TextArea value={manifestation} onChange={setManifestation} placeholder="e.g. I am attracting opportunities that align with my purpose." showCount={false} />
               </SectionCard>
 
-              <SectionCard title="What's On Your To-Do List Today?" subtitle="How energized do you feel?">
-                <TaskChecklist items={todos} onChange={setTodos} placeholder="Add your task…." addLabel="+ Add task" />
+              <SectionCard title="What's on your To-Do list today?" subtitle="How energized do you feel?">
+                <TaskChecklist items={todos} onChange={setTodos} placeholder="Add your task…." addLabel="+ Add task" bullet autoCase />
               </SectionCard>
 
               <SectionCard title="Affirmations For Today" subtitle="Choose or write your affirmations.">
@@ -767,13 +892,13 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                 />
               </SectionCard>
 
-              <SectionCard title="Anything On Your Mind?" subtitle="Write it out. Let your thoughts flow.">
+              <SectionCard title="Anything on your mind?" subtitle="Write it out. Let your thoughts flow.">
                 <VoiceTextArea value={notes} onChange={setNotes} placeholder="Type here or use voice to text…" clips={clips} onChangeClips={setClips} />
               </SectionCard>
 
-              <SectionCard title="Mark this as Special journal" subtitle="Pick hashtags that best describe how you feel.">
+              <SectionCard title="Mark this as Special journal" subtitle="Pick hashtags or create your own.">
                 <View style={s.hashRow}>
-                  {['Birthday', 'ImportantDay'].map(h => {
+                  {['Birthday', 'ImportantDay', ...customHashtags].map(h => {
                     const on = tags.includes(h);
                     return (
                       <TouchableOpacity
@@ -786,6 +911,31 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                       </TouchableOpacity>
                     );
                   })}
+                  {/* Create your own hashtag */}
+                  {addingHash ? (
+                    <View style={[s.hashChip, { flexDirection: 'row', alignItems: 'center', gap: 6, borderColor: colors.border }]}>
+                      <AppText variant="bodySmall" color={colors.textMuted}>#</AppText>
+                      <TextInput
+                        style={{ minWidth: 90, padding: 0, color: colors.textPrimary, fontFamily: 'DMSans-Regular', fontSize: 13 }}
+                        placeholder="your tag"
+                        placeholderTextColor={colors.textMuted}
+                        value={hashDraft}
+                        onChangeText={setHashDraft}
+                        autoFocus
+                        onSubmitEditing={addHashtag}
+                        onBlur={addHashtag}
+                        returnKeyType="done"
+                      />
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[s.hashChip, { borderColor: colors.border, borderStyle: 'dashed' }]}
+                      activeOpacity={0.75}
+                      onPress={() => setAddingHash(true)}
+                    >
+                      <AppText variant="bodySmall" color={colors.textSecondary}>+ Add hashtag</AppText>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </SectionCard>
             </>
@@ -793,11 +943,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
 
           {mode === 'guided' && category === 'night' && (
             <>
-              <SectionCard title="How are you feeling this morning?" subtitle="Pick words that best describe how you feel.">
+              <SectionCard title="How are you feeling tonight?" subtitle="Pick the one that best describes how you feel.">
                 <ChipMultiSelectAdd
                   options={NIGHT_MOODS} extra={customFeelings}
-                  selected={emotions} onToggle={k => toggle(emotions, setEmotions, k)}
-                  onAddCustom={addCustomChip(setCustomFeelings, setEmotions)}
+                  selected={emotions} onToggle={k => selectSingle(emotions, setEmotions, k)}
+                  onAddCustom={addCustomChipSingle(setCustomFeelings, setEmotions)}
                 />
               </SectionCard>
 
@@ -825,11 +975,11 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
                 <VoiceTextArea value={mainText} onChange={setMainText} placeholder="Type here or Tap the mic to speak…" clips={clips} onChangeClips={setClips} />
               </SectionCard>
 
-              <SectionCard title="How are you feeling right now?" subtitle="Select all that apply">
+              <SectionCard title="How are you feeling right now?" subtitle="Pick the one that fits best.">
                 <ChipMultiSelectAdd
                   options={EMOTIONS} extra={customFeelings}
-                  selected={emotions} onToggle={k => toggle(emotions, setEmotions, k)}
-                  onAddCustom={addCustomChip(setCustomFeelings, setEmotions)}
+                  selected={emotions} onToggle={k => selectSingle(emotions, setEmotions, k)}
+                  onAddCustom={addCustomChipSingle(setCustomFeelings, setEmotions)}
                 />
               </SectionCard>
 
@@ -892,24 +1042,46 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
             keyboard, instead of sitting fixed at the screen bottom with a
             gap underneath the keyboard. */}
         {mode === 'freestyle' && variant !== 'simple' && (
-          <FreestyleToolbar
-            onSticker={() => setStickerPickerOpen(true)}
-            onTextStyle={() => setTextStyleOpen(true)}
-            onBullets={insertBullet}
-            onScribble={openScribble}
-            onTag={() => setTagPickerOpen(true)}
-            onTheme={() => setThemePickerOpen(true)}
-            onPhoto={pickPhoto}
-            onVideo={pickVideo}
+          <>
+            {freeRecording && <RecordingWidget accent={th.accent} onStop={() => stopFreeRec()} />}
+            <FreestyleToolbar
+              onSticker={() => setStickerPickerOpen(true)}
+              onTextStyle={() => setTextStyleOpen(true)}
+              onBullets={insertBullet}
+              onScribble={openScribble}
+              onTag={() => setTagPickerOpen(true)}
+              onTheme={() => setThemePickerOpen(true)}
+              onPhoto={pickPhoto}
+              onVideo={pickVideo}
+              onVoice={toggleFreeRec}
+              recording={freeRecording}
+            />
+          </>
+        )}
+        {/* Freestyle + Guided both Save from the top button now. Only the
+            plain "simple" variant (Quotes/Ideas/Affirmation) still uses the
+            bottom Save bar. */}
+        {variant === 'simple' && (
+          <BottomSaveBar
+            saveLabel={saveLabel}
+            onSave={onSave}
+            onAttach={() => setAttachOpen(true)}
+            accent={theme === 'default' ? undefined : th.accent}
+            surface={theme === 'default' ? undefined : th.card}
           />
         )}
-        {/* Freestyle's Save now lives up top next to the journal type name,
-            and Photo/Video attach directly from the toolbar — so the bottom
-            bar (with its paperclip) is only needed for Guided/other modes. */}
-        {!(mode === 'freestyle' && variant !== 'simple') && (
-          <BottomSaveBar saveLabel={saveLabel} onSave={onSave} onAttach={() => setAttachOpen(true)} />
-        )}
       </KeyboardAvoidingView>
+
+      {/* Guided: a + button at the bottom-right to attach photos and videos. */}
+      {mode === 'guided' && variant !== 'simple' && (
+        <TouchableOpacity
+          style={[s.attachFab, { backgroundColor: theme === 'default' ? '#141414' : th.accent }]}
+          activeOpacity={0.85}
+          onPress={() => setAttachOpen(true)}
+        >
+          <AttachmentIcon color="#FFFFFF" width={20} height={24} />
+        </TouchableOpacity>
+      )}
 
       <MoodPickerSheet
         visible={moodPickerOpen}
@@ -947,6 +1119,7 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
       />
       <AttachTooltip
         visible={attachOpen}
+        anchor={mode === 'guided' && variant !== 'simple' ? 'right' : 'left'}
         onPhoto={pickPhoto}
         onVideo={pickVideo}
         onClose={() => setAttachOpen(false)}
@@ -968,6 +1141,7 @@ export function GuidedEntryScreen({ route, navigation }: Props) {
         </View>
       </Modal>
     </SafeAreaView>
+    </EntryThemeContext.Provider>
   );
 }
 
@@ -1007,6 +1181,13 @@ const s = StyleSheet.create({
   scrollContent: { paddingBottom: 24 },
   canvas: { flex: 1, position: 'relative', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   topSaveBtn: { borderRadius: Radius.full, paddingHorizontal: 16, paddingVertical: 8 },
+  attachFab: {
+    position: 'absolute', right: 20, bottom: 28,
+    width: 56, height: 56, borderRadius: 28,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10,
+  },
+  attachFabPlus: { color: '#FFFFFF', fontSize: 30, lineHeight: 34 },
   writeArea: { flex: 1, borderRadius: Radius.lg, paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm, marginBottom: Spacing.md },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: Spacing.sm },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },

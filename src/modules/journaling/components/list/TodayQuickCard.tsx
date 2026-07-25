@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing, Radius, Shadows } from '../../../../shared/theme/spacing';
+import { Caret } from '../Caret';
 
 interface Props {
   date: string; // ISO yyyy-mm-dd
@@ -34,11 +35,11 @@ export function TodayQuickCard({ date, onPress, icon }: Props) {
         <View style={s.chips}>
           <View style={[s.chip, { borderColor: colors.border }]}>
             <Text style={s.chipEmoji}>⛅</Text>
-            <AppText variant="caption" color={colors.textMuted}>⌄</AppText>
+            <Caret size={11} color={colors.textMuted} />
           </View>
           <View style={[s.chip, { borderColor: colors.border }]}>
             <Text style={s.chipEmoji}>🙂</Text>
-            <AppText variant="caption" color={colors.textMuted}>⌄</AppText>
+            <Caret size={11} color={colors.textMuted} />
           </View>
         </View>
       </View>

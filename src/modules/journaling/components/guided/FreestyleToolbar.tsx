@@ -82,6 +82,14 @@ const VideoIconSvg = ({ color, size }: IconProps) => (
   </Svg>
 );
 
+const MicIconSvg = ({ color, size }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="9" y="3" width="6" height="11" rx="3" stroke={color} strokeWidth={1.5} />
+    <Path d="M6 11a6 6 0 0 0 12 0" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    <Line x1="12" y1="17" x2="12" y2="21" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+  </Svg>
+);
+
 interface Props {
   onSticker:   () => void;
   onTextStyle: () => void;
@@ -91,16 +99,19 @@ interface Props {
   onTheme:     () => void;
   onPhoto?:    () => void;
   onVideo?:    () => void;
+  onVoice?:    () => void;
+  recording?:  boolean;
 }
 
 export function FreestyleToolbar({
-  onSticker, onTextStyle, onBullets, onScribble, onTag, onTheme, onPhoto, onVideo,
+  onSticker, onTextStyle, onBullets, onScribble, onTag, onTheme, onPhoto, onVideo, onVoice, recording,
 }: Props) {
   const { colors } = useTheme();
   const size = 22;
   const color = colors.textSecondary;
 
   const items: { key: string; icon: React.ReactNode; label: string; onPress?: () => void }[] = [
+    { key: 'voice',  icon: <MicIconSvg color={recording ? '#EF5350' : color} size={size} />, label: recording ? 'Stop' : 'Voice', onPress: onVoice },
     { key: 'photo',  icon: <PhotoIconSvg color={color} size={size} />, label: 'Photo',  onPress: onPhoto },
     { key: 'video',  icon: <VideoIconSvg color={color} size={size} />, label: 'Video',  onPress: onVideo },
     { key: 'theme',  icon: <GridIcon color={color} size={size} />,     label: 'Theme',  onPress: onTheme },

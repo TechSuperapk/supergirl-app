@@ -6,6 +6,7 @@
 // ── Main app top tabs ─────────────────────────────────────────────────────────
 export type MainTabParamList = {
   Journal:   undefined;
+  Club:      undefined;
   Fits:      undefined;
   Trackers:  undefined;
   Profile:   undefined;
@@ -28,10 +29,12 @@ export type ClubEventsStackParamList = {
 };
 
 export type ClubGroupsStackParamList = {
-  GroupsList:   undefined;
-  GroupDetail:  { groupId: string };
-  GroupChat:    { groupId: string };
-  GroupFeed:    { groupId: string };
+  GroupsList:       undefined;
+  GroupDetail:      { groupId: string };
+  CommunityDetail:  { communityId: string; name?: string };
+  PostDetail:       { postId: string };
+  GroupChat:        { groupId: string };
+  GroupFeed:        { groupId: string };
 };
 
 export type ClubTicketsStackParamList = {

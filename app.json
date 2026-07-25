@@ -3,6 +3,7 @@
     "name": "Super Bae",
     "slug": "super-girl",
     "version": "1.0.0",
+    "scheme": "superbae",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -57,6 +58,7 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
       [
         "expo-build-properties",
         {
@@ -65,6 +67,7 @@
           }
         }
       ],
+      "./plugins/withRnfbNonModularFix",
       "expo-sqlite",
       "expo-secure-store",
       "expo-font",
@@ -84,7 +87,15 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow SuperGirl to use the microphone for voice-to-text.",
+          "speechRecognitionPermission": "Allow SuperGirl to use speech recognition to transcribe your journal.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ]
     ],
     "extra": {
       "eas": {

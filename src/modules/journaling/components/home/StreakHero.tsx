@@ -10,7 +10,7 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { AppText } from '../../../../shared/components/AppText';
-import { Spacing, Radius, Shadows } from '../../../../shared/theme/spacing';
+import { Spacing, Radius } from '../../../../shared/theme/spacing';
 import type { JournalTypeDef } from './journalTypes';
 
 interface Props {
@@ -103,39 +103,13 @@ export function StreakHero({ eyebrow = 'Today is a', title = 'Great Day', streak
           positioned on top of it), matching the reference design exactly.
           Each item only ever takes its own content width, so there is no
           way for the title and the streak to collide, on any device. */}
+      {/* Only the greeting text remains — streak, entries ring and the
+          journal-type chips were removed per design. */}
       <View style={styles.topRow}>
         <View style={styles.titleBlock}>
           <AppText variant="label" color="rgba(255,255,255,0.75)" style={styles.eyebrow}>{eyebrow}</AppText>
           <AppText variant="headingLarge" color="#FFFFFF" style={styles.title} numberOfLines={2}>{title}</AppText>
         </View>
-
-        <View style={styles.streakBox}>
-          <View style={styles.streakNumRow}>
-            <Image source={require('../../assets/Fire.gif')} style={styles.fireImage} contentFit="contain" autoplay />
-            <AppText variant="headingMedium" color="#FFFFFF" align="center" style={styles.streakNum}>{streak}</AppText>
-          </View>
-          <AppText variant="caption" color="rgba(255,255,255,0.75)" align="center" style={styles.streakLabel}>Day Streak</AppText>
-        </View>
-
-        <EntriesRing count={entryCount} />
-      </View>
-
-      <View style={styles.chips}>
-        {items.map(t => (
-          <View key={t.key} style={styles.chip}>
-            <View style={[styles.dot, { backgroundColor: t.dot }]} />
-            <AppText
-              variant="caption"
-              color="#FFFFFF"
-              style={styles.chipText}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.9}
-            >
-              {t.short}
-            </AppText>
-          </View>
-        ))}
       </View>
     </View>
     </View>
@@ -159,6 +133,9 @@ const styles = StyleSheet.create({
     minHeight: Platform.OS === 'android' ? 128 : 148,
     backgroundColor: '#141414',
     position: 'relative',
+    // Only the greeting text remains — center it vertically so it sits at the
+    // left-center of the banner.
+    justifyContent: 'center',
   },
   glowWrap: { position: 'absolute', width: 320, height: 320, left: -48.5, top: -189.5 },
   quote: { marginBottom: Spacing.sm },
@@ -166,24 +143,40 @@ const styles = StyleSheet.create({
   // left, streak sits wherever the remaining space centres it, ring stays
   // right. None of them can ever grow into another's space, so there's
   // nothing to overlap regardless of device width or platform font metrics.
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
   titleBlock: { justifyContent: 'center', gap: 2 },
   eyebrow: Platform.OS === 'android' ? { fontSize: 12, lineHeight: 15 } : { lineHeight: 17 },
+  // "Great Day" — a touch smaller than the default headingLarge.
   title: Platform.OS === 'android'
-    ? { marginTop: 0, fontSize: 21, lineHeight: 23 }
-    : { marginTop: 0, lineHeight: 26 },
-  streakBox: { alignItems: 'center', gap: 2 },
+    ? { marginTop: 0, fontSize: 19, lineHeight: 22 }
+    : { marginTop: 0, fontSize: 21, lineHeight: 25 },
+  // Fire icon + number align to the start (left), not centred.
+  streakBox: { alignItems: 'flex-start', gap: 2 },
   streakNumRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   fireImage: Platform.OS === 'android' ? { width: 26, height: 26 } : { width: 30, height: 30 },
   streakNum: Platform.OS === 'android' ? { fontSize: 21, lineHeight: 25 } : { fontSize: 24, lineHeight: 28 },
-  streakLabel: Platform.OS === 'android' ? { fontSize: 12, lineHeight: 16 } : { fontSize: 14, lineHeight: 18 },
+  // "Day Streak" — reduced to match the smaller title.
+  streakLabel: Platform.OS === 'android' ? { fontSize: 11, lineHeight: 14 } : { fontSize: 12, lineHeight: 15 },
   ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  ringNum: { fontFamily: 'DMSans-Bold', fontSize: 16, color: '#FFFFFF', lineHeight: 18 },
-  ringLbl: { fontFamily: 'DMSans-Regular', fontSize: 8, color: 'rgba(255,255,255,0.75)' },
-  chips: { flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'space-between', gap: 4, marginTop: 'auto', paddingTop: Spacing.xs },
+  // Tight line heights so "Entries" sits right under the count.
+  ringNum: { fontFamily: 'DMSans-Bold', fontSize: 16, color: '#FFFFFF', lineHeight: 16 },
+  ringLbl: { fontFamily: 'DMSans-Regular', fontSize: 8, lineHeight: 9, color: 'rgba(255,255,255,0.75)', marginTop: -1 },
+  // Single non-wrapping row pinned to the bottom of the banner — all chips on
+  // one line, each flexing to an equal share of the width so nothing scrolls.
+  // All seven chips on ONE line, each taking an equal share of the width, with
+  // a single fixed text size (no per-chip shrinking). Spacing is kept tight so
+  // the longest label ("Morning") still fits alongside its accent dot.
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 'auto',
+    paddingTop: Spacing.sm,
+  },
   chip: {
-    ...Shadows.sm,
-    flexShrink: 1,
+    flex: 1,                 // equal share of the row -> perfectly even columns
+    height: 26,              // uniform pill height so every chip lines up
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -192,9 +185,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.28)',
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
-  chipText: { fontSize: 9, lineHeight: 12 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  chipText: { fontSize: 9, lineHeight: 12, textAlign: 'center' },
+  dot: { width: 5, height: 5, borderRadius: 2.5 },
 });

@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing } from '../../../../shared/theme/spacing';
+import { Caret } from '../Caret';
 
 interface Props {
   selected: string;
@@ -39,7 +40,7 @@ export function JournalCalendarStrip({ selected, onSelect, markedDays, onOpenMon
     <View style={s.wrap}>
       <TouchableOpacity style={s.month} activeOpacity={0.7} onPress={onOpenMonth}>
         <AppText variant="headingSmall" color={colors.textPrimary}>{sel.format('MMM YYYY')}</AppText>
-        <AppText variant="headingSmall" color={colors.textMuted}>  ⌄</AppText>
+        <Caret size={16} color={colors.textMuted} style={{ marginLeft: 4 }} />
       </TouchableOpacity>
       <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
         {days.map(d => {

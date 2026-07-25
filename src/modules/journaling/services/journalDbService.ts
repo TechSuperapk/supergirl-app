@@ -76,7 +76,8 @@ export function subscribeToJournalEntries(
 // "journal entries" API and touching the PIN/security-question flow isn't
 // something to migrate opportunistically alongside it.
 
-export interface VaultData { pin?: string; q1?: string; a1?: string; q2?: string; a2?: string; }
+// Fields hold hashes only (see utils/vaultCrypto.ts), never raw PIN/answers.
+export interface VaultData { pinHash?: string; q1?: string; a1Hash?: string; q2?: string; a2Hash?: string; }
 
 export async function saveVaultData(userId: string, data: VaultData) {
   const ref = doc(db, 'vaults', userId);

@@ -7,7 +7,7 @@
 // quick-notes AsyncStorage store. Built with the shared theme + react-native-svg.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,11 +16,12 @@ import { RootState } from '../../../store';
 import { JournalStackParamList } from '../../../navigation/JournalNavigator';
 import { JournalEntry } from '../types';
 import { AppText } from '../../../shared/components/AppText';
-import { AppTopNav } from '../../../shared/components/AppTopNav';
+import { AppTopBar } from '../../../shared/components/AppTopBar';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Spacing, Radius } from '../../../shared/theme/spacing';
 import { TAB_CONTENT_H } from '../../../navigation/tabBarMetrics';
 import { NoteCard, NoteCardData } from '../components/list';
+import { AllTypesSheet } from '../components/AllTypesSheet';
 import { loadNotes, stripHtml } from '../quickNotesStore';
 import {
   SectionHeader,
@@ -73,13 +74,16 @@ export function HomeScreen() {
     const total = entries.length || 1;
     const counts: Record<string, number> = {};
     entries.forEach(e => { const c = e.category ?? 'other'; counts[c] = (counts[c] ?? 0) + 1; });
-    return ALL_TYPES.map(t => ({
+    // Only the primary journal types (Morning/Night/Dream/Vent) — Quotes/
+    // Ideas/Affirmation are hidden from the journal UI.
+    return PRIMARY_TYPES.map(t => ({
       key: t.key, short: t.short, dot: t.dot,
       pct: Math.round(((counts[t.key] ?? 0) / total) * 100),
     }));
   }, [entries]);
 
   const [notes, setNotes] = useState<NoteCardData[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Refresh quick notes whenever the tab regains focus. Loaded through the
   // same store QuickNotesScreen uses, so the tag + plain-text preview match
@@ -111,13 +115,15 @@ export function HomeScreen() {
   };
   const openEntry = (id: string) => navigation.navigate('EntryDetail', { entryId: id });
   const goEntries = () => (navigation as any).navigate('Entries');
-  const goNotes   = () => (navigation as any).navigate('Notes');
   const openProfile = () => navigation.navigate('Profile');
+  const onPickType = (t: JournalTypeDef) => { setPickerOpen(false); openType(t); };
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bgApp }]} edges={['top']}>
-      {/* Top nav — identical on every feature's home screen */}
-      <AppTopNav active="journal" onBellPress={openProfile} onMenuPress={openProfile} />
+      {/* Header only (logo + bell + menu). The Me/Journal/Goals/Fits/Club
+          module switch now lives in the bottom nav, so the old top tab row
+          is gone to avoid duplicating it. */}
+      <AppTopBar onBellPress={openProfile} onMenuPress={openProfile} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -125,17 +131,13 @@ export function HomeScreen() {
         contentContainerStyle={{ paddingTop: Platform.OS === 'android' ? Spacing.xs : Spacing.sm, paddingBottom: scrollBottomPad }}
       >
         {/* Streak hero */}
-        <StreakHero streak={streak} entryCount={entries.length} chips={ALL_TYPES} breakdown={breakdown} />
+        <StreakHero streak={streak} entryCount={entries.length} chips={PRIMARY_TYPES} breakdown={breakdown} />
 
-        {/* Journal types — 2x2 then 3 across */}
+        {/* Journal types — 2x2 (Morning / Night / Dream / Vent).
+            Quotes / Ideas / Affirmation are intentionally hidden. */}
         <View style={s.grid}>
           {PRIMARY_TYPES.map(t => (
             <JournalTypeCard key={t.key} item={t} big onPress={() => openType(t)} />
-          ))}
-        </View>
-        <View style={s.rowThree}>
-          {SECONDARY_TYPES.map(t => (
-            <JournalTypeCard key={t.key} item={t} onPress={() => openType(t)} />
           ))}
         </View>
 
@@ -160,18 +162,14 @@ export function HomeScreen() {
           )}
         </View>
 
-        {/* Recent Notes */}
-        <View style={s.sectionSpace}>
-          <SectionHeader title="Recent Notes" onAction={goNotes} />
-          {notes.length > 0 ? (
-            notes.slice(0, NOTES_LIMIT).map(n => (
-              <NoteCard key={n.id} note={n} onPress={goNotes} />
-            ))
-          ) : (
-            <EmptyHint text="No quick notes yet. Add reminders from the Notes tab." />
-          )}
-        </View>
+        {/* Recent Notes section removed — Notes feature is hidden for now. */}
       </ScrollView>
+
+      {/* Create FAB (was in the old journal tab bar). */}
+      <TouchableOpacity style={s.fab} activeOpacity={0.85} onPress={() => setPickerOpen(true)}>
+        <Text style={s.fabPlus}>＋</Text>
+      </TouchableOpacity>
+      <AllTypesSheet visible={pickerOpen} onSelect={onPickType} onClose={() => setPickerOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -191,6 +189,13 @@ const s = StyleSheet.create({
   // Tighter on Android specifically — iOS already fits Quotes/Ideas/
   // Affirmation on screen without scrolling; Android's system chrome/font
   // scaling was pushing that row just past the fold.
+  fab: {
+    position: 'absolute', right: 20, bottom: 24,
+    width: 60, height: 60, borderRadius: 30, backgroundColor: '#141414',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10,
+  },
+  fabPlus: { color: '#FFFFFF', fontSize: 30, lineHeight: 34 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.base, marginTop: Platform.OS === 'android' ? 2 : Spacing.sm, justifyContent: 'space-between' },
   rowThree: { flexDirection: 'row', paddingHorizontal: Spacing.base, marginTop: Platform.OS === 'android' ? 0 : 2, justifyContent: 'space-between' },
 

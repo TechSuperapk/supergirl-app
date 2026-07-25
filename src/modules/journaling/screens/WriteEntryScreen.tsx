@@ -15,9 +15,10 @@ import Reanimated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-nat
 import { RootState }               from '../../../store';
 import { addEntry, updateEntry, saveDraft, deleteDraft } from '../store/journalSlice';
 import type { JournalStackParamList } from '../../../navigation/JournalNavigator';
-import { saveJournalEntry, saveDraftToFirestore, deleteDraftFromFirestore } from '../services/journalDbService';
+import { saveJournalEntry } from '../services/journalDbService';
 import { uploadFileToFirebase } from '../../../services/storageService';
 import { useOfflineJournal } from '../offline/useOfflineJournal';
+import { sentenceCase } from '../utils/textCase';
 import { ActivityIndicator } from 'react-native';
 import {
   JournalEntry, Mood, JournalTheme, StickerPlacement,
@@ -96,9 +97,16 @@ function FullCalendar({selDate,onSelect,accent}:{selDate:Date;onSelect:(d:Date)=
 }
 
 // ── Sticker — saves absolute position on release ──────────────────────────────
-function Sticker({sp,onCommit,onDelete,setActive,setArmed,setOverTrash}:{sp:StickerPlacement;onCommit:(id:string,x:number,y:number,scale:number)=>void;onDelete:(id:string)=>void;setActive:(v:boolean)=>void;setArmed:(v:boolean)=>void;setOverTrash:(v:boolean)=>void}) {
+// Gestures match StickerLayer.tsx (guided screen): 1-finger drag to move,
+// 2-finger pinch to resize, 2-finger twist to rotate, long-press to arm
+// delete. `begin` is gated on onStart (real activation), not onBegin — a
+// plain tap that never activates any gesture must not bump the active
+// count, or scrolling can stay disabled for the session (see StickerLayer
+// for the full explanation of that edge case).
+function Sticker({sp,onCommit,onDelete,setActive,setArmed,setOverTrash}:{sp:StickerPlacement;onCommit:(id:string,x:number,y:number,scale:number,rotation:number)=>void;onDelete:(id:string)=>void;setActive:(v:boolean)=>void;setArmed:(v:boolean)=>void;setOverTrash:(v:boolean)=>void}) {
   const tx=useSharedValue(sp.x), ty=useSharedValue(sp.y), sc=useSharedValue(sp.scale??1);
-  const ox=useSharedValue(0), oy=useSharedValue(0), os=useSharedValue(1);
+  const rot=useSharedValue(sp.rotation??0);
+  const ox=useSharedValue(0), oy=useSharedValue(0), os=useSharedValue(1), orot=useSharedValue(0);
   const count=useSharedValue(0);
   const armed=useSharedValue(0);
   const begin=()=>{ 'worklet'; count.value+=1; if(count.value===1) runOnJS(setActive)(true); };
@@ -111,20 +119,25 @@ function Sticker({sp,onCommit,onDelete,setActive,setArmed,setOverTrash}:{sp:Stic
     .onEnd(()=>{ if(armed.value===1){ armed.value=0; runOnJS(setArmed)(false); runOnJS(setOverTrash)(false); } });
   // 1-finger drag — reposition; once armed, drop on the trash to delete
   const pan=Gesture.Pan().maxPointers(1)
-    .onBegin(begin)
-    .onStart(()=>{ ox.value=tx.value; oy.value=ty.value; })
+    .onStart(()=>{ begin(); ox.value=tx.value; oy.value=ty.value; })
     .onUpdate(e=>{ tx.value=ox.value+e.translationX; ty.value=oy.value+e.translationY; if(armed.value===1){ runOnJS(setOverTrash)(e.absoluteY > SH - 150 && Math.abs(e.absoluteX - SW/2) < 90); } })
-    .onEnd(e=>{ if(armed.value===1 && e.absoluteY > SH - 150 && Math.abs(e.absoluteX - SW/2) < 90){ armed.value=0; runOnJS(onDelete)(sp.id); runOnJS(setArmed)(false); } else { runOnJS(onCommit)(sp.id,tx.value,ty.value,sc.value); } runOnJS(setOverTrash)(false); })
+    .onEnd(e=>{ if(armed.value===1 && e.absoluteY > SH - 150 && Math.abs(e.absoluteX - SW/2) < 90){ armed.value=0; runOnJS(onDelete)(sp.id); runOnJS(setArmed)(false); } else { runOnJS(onCommit)(sp.id,tx.value,ty.value,sc.value,rot.value); } runOnJS(setOverTrash)(false); })
     .onFinalize(finalize);
   // 2-finger pinch to resize
   const pinch=Gesture.Pinch()
-    .onBegin(begin)
-    .onStart(()=>{ os.value=sc.value; })
+    .onStart(()=>{ begin(); os.value=sc.value; })
     .onUpdate(e=>{ sc.value=Math.max(0.4,Math.min(4,os.value*e.scale)); })
-    .onEnd(()=>{ runOnJS(onCommit)(sp.id,tx.value,ty.value,sc.value); })
+    .onEnd(()=>{ runOnJS(onCommit)(sp.id,tx.value,ty.value,sc.value,rot.value); })
     .onFinalize(finalize);
-  const g=Gesture.Simultaneous(hold,tap,pan,pinch);
-  const aStyle=useAnimatedStyle(()=>({transform:[{translateX:tx.value},{translateY:ty.value},{scale:sc.value*(1+armed.value*0.12)}]}));
+  // 2-finger twist to rotate — runs simultaneously with pinch, so the
+  // combined gesture feels like Blur-style free transform.
+  const rotate=Gesture.Rotation()
+    .onStart(()=>{ begin(); orot.value=rot.value; })
+    .onUpdate(e=>{ rot.value=orot.value+(e.rotation*180)/Math.PI; })
+    .onEnd(()=>{ runOnJS(onCommit)(sp.id,tx.value,ty.value,sc.value,rot.value); })
+    .onFinalize(finalize);
+  const g=Gesture.Simultaneous(hold,tap,pan,pinch,rotate);
+  const aStyle=useAnimatedStyle(()=>({transform:[{translateX:tx.value},{translateY:ty.value},{scale:sc.value*(1+armed.value*0.12)},{rotate:`${rot.value}deg`}]}));
   return (
     <GestureDetector gesture={g}>
       <Reanimated.View style={[stk.wrap,aStyle]} hitSlop={22}>
@@ -161,7 +174,13 @@ export function WriteEntryScreen({navigation,route}:Props) {
   const [tColor,setTColor]=useState(existing?.textColor??'#111111');
   const [fSize,setFSize]=useState(existing?.fontSize??16);
   const [media,setMedia]=useState<string[]>(existing?.mediaUrls??[]);
-  const [voice,setVoice]=useState(existing?.voiceNoteUrl??'');
+  // All voice notes for this entry, in recorded order. Reads the new
+  // voiceNoteUrls array, falling back to the legacy single voiceNoteUrl for
+  // entries saved before multi-recording support. Each new recording is
+  // APPENDED as its own clip — it no longer overwrites the previous one.
+  const [voices,setVoices]=useState<string[]>(
+    existing?.voiceNoteUrls ?? (existing?.voiceNoteUrl ? [existing.voiceNoteUrl] : [])
+  );
   const [recording,setRecording]=useState(false);
   const [panel,setPanel]=useState<Panel>('none');
   const [moodModal,setMoodModal]=useState(false);
@@ -184,7 +203,10 @@ export function WriteEntryScreen({navigation,route}:Props) {
   const persistDraft = () => {
     const d = build(true);
     dispatch(saveDraft(d));
-    if (userId) saveDraftToFirestore(userId, d).catch(() => {});
+    // Drafts and finished entries live in the same backend collection now
+    // (an entry with isDraft:true), so this reuses the real /journal upsert
+    // instead of the old, dead Firestore 'journal_drafts' write.
+    if (userId) saveJournalEntry(userId, d).catch(() => {});
   };
   const liveScribbles = drafts.find(d=>d.id===eid)?.scribblePages ?? existing?.scribblePages ?? [];
 
@@ -193,7 +215,8 @@ export function WriteEntryScreen({navigation,route}:Props) {
     stickers:stickers.map(s=>s.asset??s.emoji??''),stickerPlacements:stickers,
     scribblePages:liveScribbles,
     isPrivate:priv,isImportant:important,theme,category:(existing?.category ?? (route.params?.category as any)),textColor:tColor,fontSize:fSize,mediaUrls:media,
-    voiceNoteUrl:voice||undefined,
+    voiceNoteUrls:voices.length?voices:undefined,
+    voiceNoteUrl:voices[0]||undefined, // legacy mirror for older readers
     createdAt:existing?.createdAt??date.toISOString(),
     updatedAt:new Date().toISOString(),isDraft,
     mode: existing?.mode ?? 'freestyle',
@@ -202,7 +225,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
   useEffect(()=>{
     const t=setInterval(()=>{if(title.trim()||body.trim())persistDraft();},15000);
     return ()=>clearInterval(t);
-  },[title,body,mood,theme,stickers,media,voice,priv,important,tColor,fSize,tags]);
+  },[title,body,mood,theme,stickers,media,voices,priv,important,tColor,fSize,tags]);
 
   const save=async()=>{
     if(!title.trim()&&!body.trim()){Alert.alert('Empty','Write something first.');return;}
@@ -218,8 +241,10 @@ export function WriteEntryScreen({navigation,route}:Props) {
       const entry: JournalEntry = build(false);
       saveEntry(entry, isNew);
 
-      // Clear the in-progress draft.
-      dispatch(deleteDraft(eid)); deleteDraftFromFirestore(eid).catch(() => {});
+      // Clear the local in-progress draft — the backend entry itself is
+      // already "graduated" from draft to final by the isDraft:false upsert
+      // above (same entry id), no separate cloud delete needed.
+      dispatch(deleteDraft(eid));
       navigation.navigate('Journal');
     } catch (e: any) {
       console.error(e);
@@ -234,7 +259,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
   const [stickerActive,setStickerActive]=useState(false);
   const [overTrash,setOverTrash]=useState(false);
   const [armed,setArmed]=useState(false);
-  const onStickerCommit=(id:string,x:number,y:number,scale:number)=>setStickers(p=>p.map(s=>s.id===id?{...s,x,y,scale}:s));
+  const onStickerCommit=(id:string,x:number,y:number,scale:number,rotation:number)=>setStickers(p=>p.map(s=>s.id===id?{...s,x,y,scale,rotation}:s));
   const addSticker=(key:string)=>{setStickers(p=>[...p,{id:gid(),asset:key,x:60,y:60,scale:1,rotation:0}]);setPanel('none');};
   const isVid=(u:string)=>['.mp4','.mov','.avi','.mkv'].some(x=>u.toLowerCase().endsWith(x))||u.includes('video');
 
@@ -283,12 +308,20 @@ export function WriteEntryScreen({navigation,route}:Props) {
     } catch(e){Alert.alert('Error','Cannot record');}
   };
   const stopRec=async()=>{
-    if(!recRef.current)return;
-    setRecording(false);
-    await recRef.current.stopAndUnloadAsync();
-    const u=recRef.current.getURI();
-    if(u)setVoice(u);
+    const r=recRef.current;
     recRef.current=null;
+    setRecording(false);
+    if(!r)return;
+    // stopAndUnloadAsync throws if the recorder was interrupted (incoming
+    // call, another app grabbing the mic) — unguarded, that was an
+    // unhandled rejection. Surface it instead of crashing silently.
+    try {
+      await r.stopAndUnloadAsync();
+      const u=r.getURI();
+      if(u)setVoices(v=>[...v,u]); // append — never overwrite earlier clips
+    } catch(e:any) {
+      Alert.alert('Could not save recording',e?.message??'Please try again.');
+    }
   };
 
   const openScribble=()=>{
@@ -415,7 +448,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
               style={[s.titleInput,{color:tColor,fontSize:Math.max(fSize+4,22),fontFamily:FB}]}
               placeholder="Title your journal"
               placeholderTextColor="#AAAAAA"
-              value={title} onChangeText={setTitle} maxLength={120}
+              value={title} onChangeText={t=>setTitle(sentenceCase(t))} maxLength={120}
             />
             <View style={s.divider}/>
             {/* Body + stickers */}
@@ -425,7 +458,7 @@ export function WriteEntryScreen({navigation,route}:Props) {
                     style={[s.bodyInput,{color:tColor,fontSize:fSize,fontFamily:F,lineHeight:fSize*1.65}]}
                     placeholder={"Write your journal...\nType #hashtags to auto-tag"}
                     placeholderTextColor="#AAAAAA"
-                    value={body} onChangeText={setBody}
+                    value={body} onChangeText={t=>setBody(sentenceCase(t))}
                     multiline textAlignVertical="top"
                     onBlur={()=>setBodyFocus(false)}
                   />
@@ -503,9 +536,12 @@ export function WriteEntryScreen({navigation,route}:Props) {
             </View>
           )}
 
-          {/* Voice — recording widget or playback widget, floats above toolbar */}
+          {/* Voice — recording widget while live, then one playback widget
+              per saved clip (multiple recordings per entry supported). */}
           {recording&&<RecordingWidget accent={th.accent} onStop={stopRec}/>}
-          {!!voice&&!recording&&<VoiceWidget uri={voice} accent={th.accent} onDelete={()=>setVoice('')}/>}
+          {!recording&&voices.map((u,i)=>(
+            <VoiceWidget key={`${u}_${i}`} uri={u} accent={th.accent} onDelete={()=>setVoices(v=>v.filter((_,j)=>j!==i))}/>
+          ))}
 
           {/* Panels */}
           {panel==='theme'&&(

@@ -13,7 +13,7 @@ import dayjs from 'dayjs';
 import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing, Radius, Shadows } from '../../../../shared/theme/spacing';
-import { MOOD_OPTIONS } from '../../types';
+import { MOOD_OPTIONS, JOURNAL_THEMES } from '../../types';
 import type { JournalEntry } from '../../types';
 import { ALL_TYPES } from './journalTypes';
 import { JOURNAL_TYPE_ICONS } from './journalTypeIcons';
@@ -74,9 +74,22 @@ export function RecentEntryCard({ entry, onPress }: Props) {
 
   const guidedLines = isGuided ? parseGuidedLines(entry.body).slice(0, 2) : [];
 
+  // Each entry carries its own journal theme — reflect it on the card so the
+  // history shows the individual theme it was written with. 'default' (or an
+  // entry saved before themes existed) keeps the plain app card colours.
+  const eth    = JOURNAL_THEMES.find(t => t.id === entry.theme);
+  const themed = !!eth && eth.id !== 'default';
+
   return (
     <TouchableOpacity
-      style={[s.card, Shadows.sm, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
+      style={[
+        s.card,
+        Shadows.sm,
+        {
+          backgroundColor: themed ? eth!.card : colors.bgCard,
+          borderColor:     themed ? eth!.accent + '55' : colors.border,
+        },
+      ]}
       activeOpacity={0.85}
       onPress={onPress}
     >
@@ -95,13 +108,10 @@ export function RecentEntryCard({ entry, onPress }: Props) {
             !!typeEmoji && <Text style={s.typeEmoji}>{typeEmoji}</Text>
           )}
         </View>
-        {!!modeLabel && (
-          <View style={[s.modePill, { borderColor: colors.border }]}>
-            <AppText variant="caption" color={colors.textMuted}>{modeLabel}</AppText>
-          </View>
-        )}
+        {/* Mood emoji pinned to the right of the header line. */}
+        <Text style={s.headerMood}>{moodEmoji(entry.mood)}</Text>
       </View>
-      <View style={[s.divider, { backgroundColor: colors.divider }]} />
+      <View style={[s.divider, { backgroundColor: themed ? eth!.accent + '55' : '#E4E4E4' }]} />
 
       {isGuided ? (
         <View style={s.guidedBlock}>
@@ -116,8 +126,6 @@ export function RecentEntryCard({ entry, onPress }: Props) {
         </View>
       ) : (
         <>
-          <Text style={s.mood}>{moodEmoji(entry.mood)}</Text>
-
           {!!entry.title && (
             <AppText variant="headingSmall" color={colors.textPrimary} style={s.title} numberOfLines={1}>
               {entry.title}
@@ -178,9 +186,10 @@ const s = StyleSheet.create({
   dateText: { flexShrink: 1 },
   typeEmoji: { fontSize: 20 },
   typeLogo: { width: 26, height: 26 },
+  headerMood: { fontSize: 22 },
   // Full-width line — breaks out of the card's own padding so it touches
   // both edges instead of stopping short at the content inset.
-  divider: { height: StyleSheet.hairlineWidth, marginTop: Spacing.sm, marginHorizontal: -Spacing.base },
+  divider: { height: 1, marginTop: Spacing.sm, marginHorizontal: -Spacing.base },
   modePill: {
     borderWidth: 1,
     borderRadius: Radius.full,

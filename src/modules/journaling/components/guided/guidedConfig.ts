@@ -31,7 +31,6 @@ export const PEOPLE: ChipDef[] = [
   { key: 'friends',   label: 'Friends',   emoji: '🧑‍🤝‍🧑' },
   { key: 'sibling',   label: 'Sibling',   emoji: '🧒' },
   { key: 'partner',   label: 'Partner',   emoji: '💑' },
-  { key: 'kumar',     label: 'Kumar',     emoji: '🧑' },
   { key: 'stranger',  label: 'Stranger',  emoji: '👤' },
   { key: 'celebrity', label: 'Celebrity', emoji: '⭐' },
 ];

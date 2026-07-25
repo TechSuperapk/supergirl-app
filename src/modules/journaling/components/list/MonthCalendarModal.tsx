@@ -29,9 +29,10 @@ export function MonthCalendarModal({ visible, selected, onSelect, onClose, marke
   const today = dayjs().format('YYYY-MM-DD');
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} style={[s.sheet, { backgroundColor: colors.bgCard }]}>
+          <View style={[s.grabber, { backgroundColor: colors.divider }]} />
           <View style={s.nav}>
             <TouchableOpacity onPress={() => setCursor(c => c.subtract(1, 'month'))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={[s.arr, { color: colors.textPrimary }]}>‹</Text>
@@ -67,8 +68,9 @@ export function MonthCalendarModal({ visible, selected, onSelect, onClose, marke
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'center', padding: Spacing.lg, backgroundColor: '#00000066' },
-  sheet: { borderRadius: Radius.xl, padding: Spacing.lg },
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000066' },
+  sheet: { borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing['2xl'] },
+  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginBottom: Spacing.base },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.base },
   arr: { fontSize: 26, paddingHorizontal: 8 },
   dowRow: { flexDirection: 'row', marginBottom: Spacing.sm },

@@ -7,15 +7,16 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSelector} from 'react-redux';
 import {RootState} from '../../../store';
 import {PrivateStackParamList} from '../../../navigation/PrivateNavigator';
+import {verifyVaultSecret} from '../utils/vaultCrypto';
 
 const C={blue:'#2979FF',bg:'#F2F2F7',white:'#FFFFFF',black:'#111111',grey:'#666',lgrey:'#CCCCCC',red:'#EF5350'};
 
 export function SecurityQuestionScreen() {
   const navigation=useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
   const q1=useSelector((s:RootState)=>s.journal.securityQuestion1);
-  const a1=useSelector((s:RootState)=>s.journal.securityAnswer1);
+  const a1Hash=useSelector((s:RootState)=>s.journal.securityAnswer1Hash);
   const q2=useSelector((s:RootState)=>s.journal.securityQuestion2);
-  const a2=useSelector((s:RootState)=>s.journal.securityAnswer2);
+  const a2Hash=useSelector((s:RootState)=>s.journal.securityAnswer2Hash);
   const [step,setStep]=useState(1);
   const [ans1,setAns1]=useState('');
   const [ans2,setAns2]=useState('');
@@ -23,14 +24,14 @@ export function SecurityQuestionScreen() {
 
   if(!q1){navigation.replace('PrivateJournal');return null;}
 
-  const handleVerify=()=>{
+  const handleVerify=async ()=>{
     if(step===1){
-      if(ans1.trim().toLowerCase()===a1){
+      if(await verifyVaultSecret('answer',ans1,a1Hash)){
         setError('');
         if(q2)setStep(2);else navigation.replace('PrivateJournal');
       } else setError('Incorrect answer. Please try again.');
     } else {
-      if(ans2.trim().toLowerCase()===a2)navigation.replace('PrivateJournal');
+      if(await verifyVaultSecret('answer',ans2,a2Hash))navigation.replace('PrivateJournal');
       else setError('Incorrect answer. Please try again.');
     }
   };

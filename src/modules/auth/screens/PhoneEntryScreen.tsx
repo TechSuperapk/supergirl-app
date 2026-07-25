@@ -27,6 +27,22 @@ export function PhoneEntryScreen({ onLogin }: { onLogin: () => void }) {
     setLoading(false);
   }
 
+  // Dev-only: enter the app without OTP (useful in Expo Go, where the native
+  // phone-auth module isn't available, and for quick UI testing). Signs in
+  // with a local mock user — never shown in production builds (__DEV__ gate).
+  function handleDevSkip() {
+    const num = phone.length >= 10 ? phone : '9999999999';
+    dispatch(loginSuccess({
+      id: 'dev_' + num,
+      phone: num,
+      name: '',
+      countryCode: '+91',
+      createdAt: new Date().toISOString(),
+      isVerified: true,
+    }));
+    onLogin();
+  }
+
   async function handleVerifyOtp() {
     if (otp.length !== 6) return Alert.alert('Enter the 6-digit OTP');
     setLoading(true);
@@ -94,6 +110,13 @@ export function PhoneEntryScreen({ onLogin }: { onLogin: () => void }) {
       {step === 'otp' && (
         <TouchableOpacity onPress={() => setStep('phone')} style={{ marginTop: 16 }}>
           <Text style={{ color: '#2979FF', textAlign: 'center' }}>← Change number</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Dev-only shortcut: skip OTP and enter the app directly. */}
+      {__DEV__ && (
+        <TouchableOpacity onPress={handleDevSkip} style={{ marginTop: 20 }}>
+          <Text style={{ color: '#888', textAlign: 'center' }}>Skip OTP · Enter (dev)</Text>
         </TouchableOpacity>
       )}
     </View>

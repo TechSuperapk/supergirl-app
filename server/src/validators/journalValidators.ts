@@ -12,7 +12,9 @@ export const journalEntrySchema = z.object({
   mood: z.string().default('neutral'),
   tags: z.array(z.string()).default([]),
   mediaUrls: z.array(z.string()).default([]),
-  voiceNoteUrl: z.string().optional(),
+  voiceNoteUrl: z.string().optional(), // legacy single clip — mirrors voiceNoteUrls[0]
+  voiceNoteUrls: z.array(z.string()).optional(), // all voice clips
+
   stickers: z.array(z.string()).default([]),
   stickerPlacements: z.array(z.any()).default([]),
   scribblePages: z.array(z.any()).default([]),

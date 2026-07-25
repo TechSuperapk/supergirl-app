@@ -39,8 +39,12 @@ export async function loadNotes(): Promise<QuickNoteRecord[]> {
   } catch { return []; }
 }
 
+// Deliberately does NOT swallow write failures: callers optimistically
+// update UI/navigate away after this resolves, so a silent failure here
+// used to mean the note looked saved but was actually lost on next launch.
+// Let it throw so upsertNote/removeNote (and their callers) can react.
 export async function saveNotes(list: QuickNoteRecord[]): Promise<void> {
-  try { await AsyncStorage.setItem(QUICK_NOTES_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  await AsyncStorage.setItem(QUICK_NOTES_KEY, JSON.stringify(list));
 }
 
 export async function upsertNote(note: QuickNoteRecord): Promise<QuickNoteRecord[]> {

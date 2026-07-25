@@ -12,13 +12,15 @@ import { sendOtp as fbSendOtp, verifyOtp as fbVerifyOtp } from '../services/auth
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
 import { auth } from '../../../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const { width: SW } = Dimensions.get('window');
 const F  = 'DMSans-Regular';
 const FM = 'DMSans-Medium';
 const FB = 'DMSans-Bold';
-const BLUE = '#2979FF';
+// Design uses a black theme for CTAs / accents / active dots (not blue).
+const BLUE = '#141414';
 
 // Real SMS OTP via react-native-firebase (native phone auth, no reCAPTCHA).
 // Set to false to fall back to the test/anonymous flow.
@@ -125,13 +127,64 @@ export function OnboardingScreen({ onDone }: Props) {
     setSlide(Math.round(e.nativeEvent.contentOffset.x / SW));
   };
 
+  // Shared tail of BOTH verification paths (manual code entry and Android
+  // auto-verification): exchange the Firebase ID token for our backend
+  // session and land on the welcome step. `completingRef` makes it
+  // idempotent — auto-verify firing while a manual verify is mid-flight
+  // (or vice versa) can't run the exchange twice.
+  const completingRef = useRef(false);
+  const completeSignIn = useCallback(async (fu: FirebaseAuthTypes.User) => {
+    if (completingRef.current) return;
+    completingRef.current = true;
+    setLoading(true);
+    try {
+      const idToken = await fu.getIdToken();
+      const backendUser = await exchangeFirebaseTokenForSession(idToken);
+      dispatch(loginSuccess({
+        id: backendUser.id,
+        name: backendUser.name ?? '',
+        phone: backendUser.phone || `${cc}${phone}`,
+        countryCode: backendUser.countryCode || cc,
+        avatarUrl: backendUser.avatarUrl,
+        bio: backendUser.bio,
+        createdAt: backendUser.createdAt,
+        isVerified: true,
+      }));
+      setStep('welcome');
+    } catch (e: any) {
+      completingRef.current = false;
+      Alert.alert('Verification failed', e?.message ?? 'Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [dispatch, cc, phone]);
+
+  // Skip → enter the app as a guest (no phone login). A name is set so the
+  // root navigator routes straight to the app instead of the profile setup.
+  const handleSkip = () => {
+    dispatch(loginSuccess({
+      id: 'guest_' + Date.now(),
+      name: 'Guest',
+      phone: '',
+      countryCode: cc,
+      createdAt: new Date().toISOString(),
+      isVerified: false,
+    }));
+    onDone();
+  };
+
   const sendOtp = async () => {
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
     if (USE_REAL_OTP) {
       setLoading(true);
       try {
-        await fbSendOtp(`${cc}${digits}`);
+        // completeSignIn doubles as the auto-verification handler: on
+        // Android, Firebase may verify the SMS silently seconds after it
+        // arrives — previously that consumed the pending confirmation and
+        // made manual entry fail with "session expired" (the reported
+        // "OTP expires in 6-7 seconds" bug). Now it just logs you in.
+        await fbSendOtp(`${cc}${digits}`, completeSignIn);
         setStep('otp'); setResend(29); setOtp('');
         setTimeout(() => otpRefs.current[0]?.focus(), 350);
       } catch (e: any) {
@@ -150,22 +203,11 @@ export function OnboardingScreen({ onDone }: Props) {
     try {
       const digits = phone.replace(/\D/g, '');
       if (USE_REAL_OTP) {
-        // 1. Confirm the SMS code with Firebase.
+        // Confirm the SMS code with Firebase, then run the shared
+        // completion path (backend exchange + welcome step).
         const fu = await fbVerifyOtp(otp);
-        // 2. Hand the Firebase ID token to our backend, which verifies it
-        //    (Firebase Admin) and mints our own session JWT + Mongo user.
-        const idToken = await fu.getIdToken();
-        const backendUser = await exchangeFirebaseTokenForSession(idToken);
-        dispatch(loginSuccess({
-          id: backendUser.id,
-          name: backendUser.name ?? '',
-          phone: backendUser.phone || `${cc}${phone}`,
-          countryCode: backendUser.countryCode || cc,
-          avatarUrl: backendUser.avatarUrl,
-          bio: backendUser.bio,
-          createdAt: backendUser.createdAt,
-          isVerified: true,
-        }));
+        await completeSignIn(fu);
+        return;
       } else {
         // Test mode: sign in anonymously so writes have a real auth uid.
         // Falls back to a local session if Anonymous auth isn't enabled yet.
@@ -193,6 +235,12 @@ export function OnboardingScreen({ onDone }: Props) {
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Skip → enter as guest (phone step only). */}
+        {step === 'phone' && (
+          <TouchableOpacity style={s.skip} onPress={handleSkip} activeOpacity={0.8}>
+            <Text style={[s.skipT, { fontFamily: FM }]}>Skip</Text>
+          </TouchableOpacity>
+        )}
         {/* Carousel — collapses while the keyboard is open */}
         {!kbOpen && (
         <View style={s.heroWrap}>
@@ -257,7 +305,7 @@ export function OnboardingScreen({ onDone }: Props) {
                 </View>
               )}
               <TouchableOpacity style={s.cta} onPress={sendOtp} activeOpacity={0.85}>
-                <Text style={[s.ctaT, { fontFamily: FB }]}>Continue</Text>
+                <Text style={[s.ctaT, { fontFamily: FB }]}>Get OTP</Text>
               </TouchableOpacity>
             </>
           )}
@@ -334,7 +382,7 @@ const s = StyleSheet.create({
   heroText:    { paddingHorizontal: 28, paddingTop: 16 },
   title:       { fontSize: 24, color: '#111', textAlign: 'center', lineHeight: 31 },
   sub:         { fontSize: 14, color: '#8A8F98', textAlign: 'center', lineHeight: 21, marginTop: 10 },
-  skip:        { position: 'absolute', top: 14, right: 16, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 7 },
+  skip:        { position: 'absolute', top: 14, right: 16, zIndex: 10, elevation: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 18, paddingHorizontal: 18, paddingVertical: 8 },
   skipT:       { fontSize: 14, color: '#FFFFFF' },
   dots:        { flexDirection: 'row', gap: 6, alignSelf: 'center', marginTop: 16 },
   dot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D7DBE0' },

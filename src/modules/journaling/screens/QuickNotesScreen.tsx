@@ -57,7 +57,10 @@ export function QuickNotesScreen() {
   const openNote = (n: QuickNoteRecord) => navigation.navigate('NoteEditor', { noteId: n.id });
   const del = (n: QuickNoteRecord) => Alert.alert('Delete note?', 'This cannot be undone.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: async () => setNotes(await removeNote(n.id)) },
+    { text: 'Delete', style: 'destructive', onPress: async () => {
+      try { setNotes(await removeNote(n.id)); }
+      catch { Alert.alert('Could not delete', 'Please try again.'); }
+    } },
   ]);
 
   const toCard = (n: QuickNoteRecord): NoteCardData => ({

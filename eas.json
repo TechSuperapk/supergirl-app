@@ -7,19 +7,20 @@
       "channel": "development",
       "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://supergirl-journal-api.onrender.com/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://supergirl-journal-api.onrender.com/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://supergirl-journal-api.onrender.com/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
     }
   }
 }

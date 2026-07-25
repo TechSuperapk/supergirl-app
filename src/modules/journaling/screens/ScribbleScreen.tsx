@@ -20,7 +20,7 @@ import { saveScribblePage } from '../store/journalSlice';
 import type { JournalStackParamList } from '../../../navigation/JournalNavigator';
 import { ScribblePath, ScribblePage } from '../types';
 import { saveJournalEntry } from '../services/journalDbService';
-import { SCRIBBLE_CANVAS_WIDTH, SCRIBBLE_CANVAS_HEIGHT } from '../scribbleConstants';
+import { SCRIBBLE_CANVAS_WIDTH, SCRIBBLE_CANVAS_HEIGHT, SCRIBBLE_VIEW_BOX } from '../scribbleConstants';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'Scribble'>;
 
@@ -35,6 +35,64 @@ const PEN_COLORS = [
   '#FFFFFF',
 ];
 const PEN_SIZES = [2, 4, 7, 12];
+const ERASER_RADIUS = 16;
+
+// ── Real eraser support ───────────────────────────────────────────────────────
+// The old "eraser" just painted white strokes — visibly wrong on the grey
+// canvas, and wrong again in previews (white bands over other strokes).
+// The real eraser removes any stored path the finger touches.
+const pointsCache = new Map<string, Array<[number, number]>>();
+function pathPoints(d: string): Array<[number, number]> {
+  let pts = pointsCache.get(d);
+  if (!pts) {
+    pts = [];
+    const re = /[ML](-?[\d.]+),(-?[\d.]+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(d))) pts.push([parseFloat(m[1]), parseFloat(m[2])]);
+    pointsCache.set(d, pts);
+  }
+  return pts;
+}
+// Distance from point (px,py) to segment (x1,y1)-(x2,y2), squared.
+function segDist2(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+  const cx = x1 + t * dx, cy = y1 + t * dy;
+  return (px - cx) ** 2 + (py - cy) ** 2;
+}
+function pathHit(p: ScribblePath, x: number, y: number): boolean {
+  const pts = pathPoints(p.d);
+  if (pts.length === 0) return false;
+  const r = ERASER_RADIUS + p.width / 2;
+  const r2 = r * r;
+  if (pts.length === 1) return (x - pts[0][0]) ** 2 + (y - pts[0][1]) ** 2 <= r2;
+  for (let i = 1; i < pts.length; i++) {
+    if (segDist2(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= r2) return true;
+  }
+  return false;
+}
+
+// Saved strokes only re-render when a stroke is added/removed — NOT on every
+// finger move. Previously each onPanResponderMove state update re-rendered
+// every stored path, which is what made long drawing sessions lag.
+const SavedPaths = React.memo(function SavedPaths({ paths }: { paths: ScribblePath[] }) {
+  return (
+    <>
+      {paths.map((p, i) => (
+        <SvgPath
+          key={`${i}_${p.d.length}`}
+          d={p.d}
+          stroke={p.color}
+          strokeWidth={p.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      ))}
+    </>
+  );
+});
 
 export function ScribbleScreen({ navigation, route }: Props) {
   const dispatch   = useDispatch();
@@ -64,36 +122,57 @@ export function ScribbleScreen({ navigation, route }: Props) {
   const [penSize, setPenSize]     = useState(4);
   const [isEraser, setIsEraser]   = useState(false);
   const [saved, setSaved]         = useState(false);
-  const canvasLayout = useRef({ x:0, y:0, width: SW, height: CANVAS_H });
 
-  const effectiveColor = isEraser ? '#FFFFFF' : penColor;
-  const effectiveSize  = isEraser ? 24 : penSize;
+  // Journal mode must always save under a real page id — `pageId!` used to
+  // silently create a page with id `undefined` if the caller forgot it.
+  const pageIdRef = useRef(pageId ?? `scribble_${entryId ?? 'page'}_${Date.now()}`);
+
+  const effectiveColor = penColor;
+  const effectiveSize  = penSize;
   // PanResponder.create() only runs once (it's wrapped in useRef below so the
   // gesture doesn't get torn down/recreated mid-stroke), so its handlers
-  // close over whatever `effectiveColor`/`effectiveSize` were on that very
-  // first render — permanently, even after picking a different color later.
-  // That was the bug behind every stroke saving in the same (initial,
-  // black) color no matter what was selected. Reading through refs instead
-  // means the handlers always see the latest value at the moment a stroke
-  // actually ends, regardless of when the PanResponder itself was built.
+  // close over whatever the values were on that very first render —
+  // permanently, even after picking a different color later. That was the
+  // bug behind every stroke saving in the same (initial, black) color no
+  // matter what was selected. Reading through refs instead means the
+  // handlers always see the latest value at the moment a stroke actually
+  // ends, regardless of when the PanResponder itself was built.
   const effectiveColorRef = useRef(effectiveColor);
   const effectiveSizeRef  = useRef(effectiveSize);
+  const isEraserRef       = useRef(isEraser);
   effectiveColorRef.current = effectiveColor;
   effectiveSizeRef.current  = effectiveSize;
+  isEraserRef.current       = isEraser;
+
+  // Clamp to the fixed drawing surface so no point is ever recorded outside
+  // the shared viewBox (previews would clip it).
+  const clampX = (v: number) => Math.max(0, Math.min(SW, v));
+  const clampY = (v: number) => Math.max(0, Math.min(CANVAS_H, v));
+
+  // Real eraser: remove every stored path the finger passes over.
+  const eraseAt = (x: number, y: number) => {
+    setPaths(p => {
+      const kept = p.filter(path => !pathHit(path, x, y));
+      return kept.length === p.length ? p : kept;
+    });
+  };
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder:  () => true,
     onPanResponderGrant: (e) => {
-      const { locationX, locationY } = e.nativeEvent;
-      setCurrent(`M${locationX.toFixed(1)},${locationY.toFixed(1)}`);
+      const x = clampX(e.nativeEvent.locationX), y = clampY(e.nativeEvent.locationY);
       setSaved(false);
+      if (isEraserRef.current) { eraseAt(x, y); return; }
+      setCurrent(`M${x.toFixed(1)},${y.toFixed(1)}`);
     },
     onPanResponderMove: (e) => {
-      const { locationX, locationY } = e.nativeEvent;
-      setCurrent(prev => `${prev} L${locationX.toFixed(1)},${locationY.toFixed(1)}`);
+      const x = clampX(e.nativeEvent.locationX), y = clampY(e.nativeEvent.locationY);
+      if (isEraserRef.current) { eraseAt(x, y); return; }
+      setCurrent(prev => `${prev} L${x.toFixed(1)},${y.toFixed(1)}`);
     },
     onPanResponderRelease: () => {
+      if (isEraserRef.current) return;
       setCurrent(prev => {
         if (prev) {
           setPaths(p => [...p, { d: prev, color: effectiveColorRef.current, width: effectiveSizeRef.current }]);
@@ -127,7 +206,7 @@ export function ScribbleScreen({ navigation, route }: Props) {
     }
 
     const page: ScribblePage = {
-      id: pageId!,
+      id: pageIdRef.current,
       paths: currentPaths,
       createdAt: existingPage?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -140,7 +219,7 @@ export function ScribbleScreen({ navigation, route }: Props) {
     // Save to Firestore
     if (userId && entry) {
       const updatedPages = [...(entry.scribblePages ?? [])];
-      const pageIdx = updatedPages.findIndex(p => p.id === pageId);
+      const pageIdx = updatedPages.findIndex(p => p.id === pageIdRef.current);
       if (pageIdx !== -1) {
         updatedPages[pageIdx] = page;
       } else {
@@ -183,42 +262,33 @@ export function ScribbleScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* Canvas */}
-      <View
-        style={s.canvas}
-        onLayout={e => { canvasLayout.current = e.nativeEvent.layout; }}
-        {...panResponder.panHandlers}
-      >
-        <Svg
-          width={SW}
-          height={CANVAS_H}
-          style={StyleSheet.absoluteFill}
-        >
-          {paths.map((p, i) => (
-            <SvgPath
-              key={i}
-              d={p.d}
-              stroke={p.color}
-              strokeWidth={p.width}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ))}
-          {currentPath ? (
-            <SvgPath
-              d={currentPath}
-              stroke={effectiveColor}
-              strokeWidth={effectiveSize}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ) : null}
-        </Svg>
-        {paths.length === 0 && !currentPath && (
-          <Text style={[s.hint, {fontFamily:FONT}]}>✏️  Draw with your finger</Text>
-        )}
+      {/* Canvas — the drawing surface is EXACTLY the shared constants
+          (SCRIBBLE_CANVAS_WIDTH × SCRIBBLE_CANVAS_HEIGHT) with the pan
+          handlers attached to it directly, so recorded coordinates always
+          match the viewBox every preview renders with. Previously the
+          handlers sat on a flex:1 view whose real size varied per device,
+          which skewed/offset drawings in previews. */}
+      <View style={s.canvas}>
+        <View style={s.surface} {...panResponder.panHandlers}>
+          <Svg width="100%" height="100%" viewBox={SCRIBBLE_VIEW_BOX}>
+            <SavedPaths paths={paths} />
+            {currentPath ? (
+              <SvgPath
+                d={currentPath}
+                stroke={effectiveColor}
+                strokeWidth={effectiveSize}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : null}
+          </Svg>
+          {paths.length === 0 && !currentPath && (
+            <Text style={[s.hint, {fontFamily:FONT}]}>
+              {isEraser ? '⬜  Rub over strokes to erase' : '✏️  Draw with your finger'}
+            </Text>
+          )}
+        </View>
       </View>
 
 
@@ -282,16 +352,23 @@ const s = StyleSheet.create({
   clearTxt:{ fontSize:13, color:'#EF5350' },
   canvas: {
     flex:1,
+    backgroundColor:'#D8D8DC', // backdrop behind the fixed-size surface
+    borderBottomWidth:0.5,
+    borderBottomColor:'#E8E8E8',
+    alignItems:'center',
+    overflow:'hidden',
+  },
+  surface: {
+    width: SW,
+    height: CANVAS_H,
     // Clearly darker than pure white so a white pen stroke is actually
     // visible while drawing — '#FAFAFA' was only 5 points off white and
     // made the white pen option look broken/invisible.
     backgroundColor:'#E7E7EA',
-    borderBottomWidth:0.5,
-    borderBottomColor:'#E8E8E8',
     alignItems:'center',
     justifyContent:'center',
   },
-  hint:   { fontSize:16, color:'#CCCCCC' },
+  hint:   { fontSize:16, color:'#CCCCCC', position:'absolute' },
   toolbar:{ backgroundColor:'#FFFFFF', paddingVertical:10, paddingHorizontal:12, borderTopWidth:0.5, borderTopColor:'#E8E8E8' },
   colorScroll:{ marginBottom:10 },
   colorRow:   { flexDirection:'row', alignItems:'center', gap:10, paddingHorizontal:4 },

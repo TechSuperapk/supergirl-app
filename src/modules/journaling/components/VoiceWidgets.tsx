@@ -3,11 +3,11 @@
 // inside WriteEntryScreen.tsx; extracted here so Journal and Notes share the
 // literal same widget instead of two copies that could drift apart.
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 
 // ── Telegram-style Voice Widget ───────────────────────────────────────────────
-export function VoiceWidget({ uri, accent, onDelete }: { uri: string; accent: string; onDelete: () => void }) {
+export function VoiceWidget({ uri, accent, onDelete }: { uri: string; accent: string; onDelete?: () => void }) {
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0); // 0-1
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -22,7 +22,13 @@ export function VoiceWidget({ uri, accent, onDelete }: { uri: string; accent: st
         if (st.didJustFinish) { setPlaying(false); setPos(0); }
       });
       await sound.playAsync();
-    } catch (e) {}
+    } catch (e) {
+      // Playback genuinely failed (bad/missing file, unsupported codec,
+      // permissions) — don't leave the UI stuck showing "playing".
+      console.warn('Voice note playback failed:', e);
+      setPlaying(false);
+      Alert.alert('Playback failed', "This voice note couldn't be played.");
+    }
   };
   const stop = async () => { if (soundRef.current) { await soundRef.current.stopAsync(); setPlaying(false); } };
   // Fake waveform bars
@@ -38,7 +44,9 @@ export function VoiceWidget({ uri, accent, onDelete }: { uri: string; accent: st
           <View key={i} style={[vw.bar, { height: Math.max(4, h * 28), backgroundColor: i < filled ? accent : '#DDD' }]} />
         ))}
       </View>
-      <TouchableOpacity onPress={onDelete} style={vw.delBtn}><Text style={vw.delT}>×</Text></TouchableOpacity>
+      {!!onDelete && (
+        <TouchableOpacity onPress={onDelete} style={vw.delBtn}><Text style={vw.delT}>×</Text></TouchableOpacity>
+      )}
     </View>
   );
 }

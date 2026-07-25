@@ -6,13 +6,14 @@ import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing } from '../../../../shared/theme/spacing';
 
-interface Props { title: string; subtitle?: string; right?: React.ReactNode; }
+interface Props { title: string; subtitle?: string; right?: React.ReactNode; left?: React.ReactNode; }
 
-export function PageHeader({ title, subtitle, right }: Props) {
+export function PageHeader({ title, subtitle, right, left }: Props) {
   const { colors } = useTheme();
   return (
     <View style={s.wrap}>
       <View style={s.row}>
+        {!!left && <View style={s.left}>{left}</View>}
         <View style={s.titleCol}>
           <AppText variant="displayMedium" color={colors.textPrimary}>{title}</AppText>
           {!!subtitle && (
@@ -30,4 +31,5 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   titleCol: { flex: 1 },
   right: { flexShrink: 0, maxWidth: '55%' },
+  left: { flexShrink: 0, marginRight: 4 },
 });

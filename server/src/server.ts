@@ -1,10 +1,31 @@
+import cron from 'node-cron';
 import { createApp } from './app';
 import { connectDb } from './config/db';
 import { env } from './config/env';
+import { runOutfitOfTheDayBatch } from './jobs/outfitOfTheDay';
+
+function scheduleOutfitOfTheDay() {
+  if (!env.ootdCronEnabled) return;
+  if (!cron.validate(env.ootdCronSchedule)) {
+    // eslint-disable-next-line no-console
+    console.warn('[ootd] invalid OOTD_CRON_SCHEDULE, skipping:', env.ootdCronSchedule);
+    return;
+  }
+  cron.schedule(env.ootdCronSchedule, () => {
+    runOutfitOfTheDayBatch()
+      // eslint-disable-next-line no-console
+      .then(r => console.log('[ootd] batch done', r))
+      // eslint-disable-next-line no-console
+      .catch(e => console.error('[ootd] batch failed', e));
+  });
+  // eslint-disable-next-line no-console
+  console.log('[ootd] scheduled:', env.ootdCronSchedule);
+}
 
 async function main() {
   await connectDb();
   const app = createApp();
+  scheduleOutfitOfTheDay();
   app.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(`[server] listening on http://localhost:${env.port}`);

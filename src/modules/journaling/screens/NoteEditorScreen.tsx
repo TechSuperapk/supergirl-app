@@ -46,6 +46,7 @@ import { AppText } from '../../../shared/components/AppText';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Spacing, Radius } from '../../../shared/theme/spacing';
 import { QuickNoteRecord, NoteAudio, ChecklistItem, NoteSketch, loadNotes, upsertNote, removeNote, stripHtml } from '../quickNotesStore';
+import { sentenceCase } from '../utils/textCase';
 import { SCRIBBLE_VIEW_BOX } from '../scribbleConstants';
 import type { ScribblePath } from '../types';
 import { AttachmentGrid } from '../components/guided/AttachmentGrid';
@@ -245,7 +246,10 @@ export function NoteEditorScreen({ route, navigation }: Props) {
     updatedAt: new Date().toISOString(),
   });
 
-  const onSave = async () => { await upsertNote(buildRecord()); navigation.goBack(); };
+  const onSave = async () => {
+    try { await upsertNote(buildRecord()); navigation.goBack(); }
+    catch { Alert.alert('Could not save', 'Your note was not saved. Please try again.'); }
+  };
 
   // Rec is handled separately by the mic button (startRec/stopRec) in the
   // main toolbar, not through this + menu dispatcher.
@@ -269,12 +273,17 @@ export function NoteEditorScreen({ route, navigation }: Props) {
       if (!noteId) { navigation.goBack(); return; }
       Alert.alert('Delete note?', 'This cannot be undone.', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => { await removeNote(noteId); navigation.goBack(); } },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try { await removeNote(noteId); navigation.goBack(); }
+          catch { Alert.alert('Could not delete', 'Please try again.'); }
+        } },
       ]);
     } else if (key === 'copy') {
       setMenu('none');
-      await upsertNote({ ...buildRecord(), id: gid(), title: `${title.trim() || 'Untitled'} (copy)` });
-      Alert.alert('Copied', 'A copy was saved to your notes.'); navigation.goBack();
+      try {
+        await upsertNote({ ...buildRecord(), id: gid(), title: `${title.trim() || 'Untitled'} (copy)` });
+        Alert.alert('Copied', 'A copy was saved to your notes.'); navigation.goBack();
+      } catch { Alert.alert('Could not copy', 'Please try again.'); }
     } else if (key === 'share') {
       afterMenuClose(shareNote);
     } else if (key === 'labels') {
@@ -327,7 +336,7 @@ export function NoteEditorScreen({ route, navigation }: Props) {
             <TextInput
               style={[s.titleInput, { color: colors.textPrimary, fontFamily: 'DMSans-Bold' }]}
               placeholder="Title" placeholderTextColor={colors.textMuted}
-              value={title} onChangeText={setTitle}
+              value={title} onChangeText={t => setTitle(sentenceCase(t))}
             />
             <TouchableOpacity style={[s.labelPill, { borderColor: colors.border }]} activeOpacity={0.75} onPress={() => setLabelOpen(true)}>
               {lab ? (
@@ -375,7 +384,7 @@ export function NoteEditorScreen({ route, navigation }: Props) {
                     placeholder="List item"
                     placeholderTextColor={colors.textMuted}
                     value={item.text}
-                    onChangeText={t => editChecklistItem(item.id, t)}
+                    onChangeText={t => editChecklistItem(item.id, sentenceCase(t))}
                   />
                   <TouchableOpacity onPress={() => removeChecklistItem(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Text style={{ color: colors.textMuted, fontSize: 15 }}>✕</Text>

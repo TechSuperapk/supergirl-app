@@ -5,19 +5,23 @@ interface JournalState {
   entries: JournalEntry[];
   drafts: JournalEntry[];
   selectedMood: Mood | null;
-  vaultPin: string;
+  // Hashes only (see utils/vaultCrypto.ts) — never the raw PIN/answers.
+  // An empty hash means "not set up yet"; there's no more '1234' sentinel
+  // default, since a default that hashes wouldn't be guessable but would
+  // still unlock the vault for anyone who read the code.
+  vaultPinHash: string;
   vaultUnlocked: boolean;
   securityQuestion1: string;
-  securityAnswer1: string;
+  securityAnswer1Hash: string;
   securityQuestion2: string;
-  securityAnswer2: string;
+  securityAnswer2Hash: string;
 }
 
 const initialState: JournalState = {
   entries: [], drafts: [], selectedMood: null,
-  vaultPin: '1234', vaultUnlocked: false,
-  securityQuestion1: '', securityAnswer1: '',
-  securityQuestion2: '', securityAnswer2: '',
+  vaultPinHash: '', vaultUnlocked: false,
+  securityQuestion1: '', securityAnswer1Hash: '',
+  securityQuestion2: '', securityAnswer2Hash: '',
 };
 
 const journalSlice = createSlice({
@@ -77,17 +81,20 @@ const journalSlice = createSlice({
     loadDrafts(state, a: PayloadAction<JournalEntry[]>)    { state.drafts = a.payload; },
     unlockVault(state) { state.vaultUnlocked = true; },
     lockVault(state)   { state.vaultUnlocked = false; },
-    setVaultPin(state, a: PayloadAction<string>) { state.vaultPin = a.payload; },
-    setSecurityQuestions(state, a: PayloadAction<{q1:string;a1:string;q2:string;a2:string}>) {
-      state.securityQuestion1 = a.payload.q1; state.securityAnswer1 = a.payload.a1.toLowerCase().trim();
-      state.securityQuestion2 = a.payload.q2; state.securityAnswer2 = a.payload.a2.toLowerCase().trim();
+    // Payloads here are already-hashed values (see utils/vaultCrypto.ts) —
+    // hashing happens at the call site, before dispatch, since it's async
+    // and reducers must stay synchronous.
+    setVaultPinHash(state, a: PayloadAction<string>) { state.vaultPinHash = a.payload; },
+    setSecurityQuestionHashes(state, a: PayloadAction<{q1:string;a1Hash:string;q2:string;a2Hash:string}>) {
+      state.securityQuestion1 = a.payload.q1; state.securityAnswer1Hash = a.payload.a1Hash;
+      state.securityQuestion2 = a.payload.q2; state.securityAnswer2Hash = a.payload.a2Hash;
     },
-    loadVault(state, a: PayloadAction<{pin?:string;q1?:string;a1?:string;q2?:string;a2?:string}>) {
-      if (a.payload.pin) state.vaultPin = a.payload.pin;
+    loadVault(state, a: PayloadAction<{pinHash?:string;q1?:string;a1Hash?:string;q2?:string;a2Hash?:string}>) {
+      if (a.payload.pinHash) state.vaultPinHash = a.payload.pinHash;
       if (a.payload.q1 !== undefined) state.securityQuestion1 = a.payload.q1;
-      if (a.payload.a1 !== undefined) state.securityAnswer1 = a.payload.a1;
+      if (a.payload.a1Hash !== undefined) state.securityAnswer1Hash = a.payload.a1Hash;
       if (a.payload.q2 !== undefined) state.securityQuestion2 = a.payload.q2;
-      if (a.payload.a2 !== undefined) state.securityAnswer2 = a.payload.a2;
+      if (a.payload.a2Hash !== undefined) state.securityAnswer2Hash = a.payload.a2Hash;
     },
   },
 });
@@ -96,6 +103,6 @@ export const {
   addEntry, updateEntry, deleteEntry, saveDraft, deleteDraft,
   moveToPrivate, moveToPublic, setFavorite, saveScribblePage,
   setSelectedMood, loadEntries, loadDrafts,
-  unlockVault, lockVault, setVaultPin, setSecurityQuestions, loadVault,
+  unlockVault, lockVault, setVaultPinHash, setSecurityQuestionHashes, loadVault,
 } = journalSlice.actions;
 export default journalSlice.reducer;

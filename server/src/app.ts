@@ -7,6 +7,9 @@ import { env } from './config/env';
 import { authRoutes } from './routes/authRoutes';
 import { journalRoutes } from './routes/journalRoutes';
 import { noteRoutes } from './routes/noteRoutes';
+import { aiRoutes } from './routes/aiRoutes';
+import { weatherRoutes } from './routes/weatherRoutes';
+import { paymentRoutes } from './routes/paymentRoutes';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const MONGO_STATES: Record<number, string> = {
@@ -46,6 +49,10 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/journal', journalRoutes);
   app.use('/api/notes', noteRoutes);
+  // AI Digital Wardrobe proxy (Milestone 2) — keeps AI/weather keys server-side.
+  app.use('/api/ai', aiRoutes);
+  app.use('/api/weather', weatherRoutes);
+  app.use('/api/payments', paymentRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

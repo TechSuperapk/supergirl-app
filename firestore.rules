@@ -3,7 +3,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() { return request.auth != null; }
     function isOwner(uid) { return request.auth.uid == uid; }
-    match /users/{uid} { allow read: if isAuth(); allow create,update: if isAuth() && isOwner(uid); allow delete: if false; }
+    // Owner-only: this doc holds phone number, name, country code, etc.
+    // Nothing in the app reads another user's /users/{uid} doc directly —
+    // Club/boards denormalize authorName/authorAvatar onto their own posts,
+    // comments, and messages — so there's no legitimate case for
+    // isAuth()-only read here. Previously any signed-in user could read any
+    // other user's profile doc.
+    match /users/{uid} { allow read: if isAuth() && isOwner(uid); allow create,update: if isAuth() && isOwner(uid); allow delete: if false; }
     // Per-user backup subcollections: journals, settings, reminders, templates, backups (owner-only).
     match /users/{uid}/{sub}/{docId} { allow read, write: if isAuth() && isOwner(uid); }
     match /subscriptions/{uid} { allow read,write: if isAuth() && isOwner(uid); }
@@ -23,9 +29,50 @@ service cloud.firestore {
     match /club_tickets/{id} { allow read: if isAuth() && request.auth.uid == resource.data.userId; allow create: if isAuth() && request.auth.uid == request.resource.data.userId; allow update: if false; }
     match /club_groups/{id} { allow read: if isAuth(); allow create: if isAuth(); allow update: if isAuth(); allow delete: if isAuth() && request.auth.uid == resource.data.creatorId; }
     match /club_group_messages/{id} { allow read: if isAuth(); allow create: if isAuth() && request.auth.uid == request.resource.data.senderId; allow update,delete: if false; }
+    // Communities ("Hives"): readable by anyone signed in. Only the single
+    // default community (Baehive, fixed doc id — see BAEHIVE_COMMUNITY_ID in
+    // clubFirestoreService.ts) can be client-created, via ensureDefaultCommunity
+    // on first login; any other community must be seeded server-side/by an
+    // admin. memberCount is the only field regular clients may ever update
+    // (join/leave increments/decrements it) — everything else is immutable
+    // from the client once created.
+    match /club_communities/{communityId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && communityId == 'baehive' && request.resource.data.isDefault == true;
+      allow update: if isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount']);
+      allow delete: if false;
+    }
+    // Membership rows are owner-only (doc id is `${communityId}_${userId}`,
+    // but ownership is enforced via the userId field, not the id shape).
+    match /club_community_members/{membershipId} {
+      // resource == null must be checked first: ensureDefaultCommunity()
+      // does a getDoc() on the membership doc before it necessarily exists
+      // (to decide whether to create it), and a bare resource.data.userId
+      // check throws (-> permission-denied) rather than "not found" when the
+      // doc is missing.
+      allow read: if isAuth() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuth() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuth() && resource.data.userId == request.auth.uid;
+    }
+    // Drafts are strictly owner-only — never readable by anyone else, unlike
+    // published posts.
+    match /club_drafts/{draftId} {
+      allow read: if isAuth() && (resource == null || resource.data.authorId == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuth() && resource.data.authorId == request.auth.uid && request.resource.data.authorId == request.auth.uid;
+      allow delete: if isAuth() && resource.data.authorId == request.auth.uid;
+    }
     match /fits_wardrobe/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
     match /fits_outfits/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
     match /fits_planner/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    // AI Digital Wardrobe (Milestone 2) — trips, settings, analytics cache are
+    // owner-only; the daily Outfit-of-the-Day doc is written by the server
+    // (firebase-admin bypasses rules) and only read by its owner.
+    match /fits_trips/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
+    match /fits_settings/{uid} { allow read,write: if isAuth() && request.auth.uid == uid; }
+    match /fits_analytics_cache/{uid} { allow read,write: if isAuth() && request.auth.uid == uid; }
+    match /fits_ootd/{id} { allow read: if isAuth() && request.auth.uid == resource.data.userId; allow write: if false; }
     match /trackers_mood/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
     match /trackers_sleep/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }
     match /trackers_habits/{id} { allow read,write: if isAuth() && (resource == null || request.auth.uid == resource.data.userId); }

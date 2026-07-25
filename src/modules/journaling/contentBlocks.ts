@@ -47,3 +47,7 @@ export function newImageBlock(uri: string, isVideo?: boolean): ContentBlock {
 export function newScribbleBlock(pageId: string): ContentBlock {
   return { id: gid(), type: 'scribble', pageId };
 }
+
+export function newAudioBlock(uri: string): ContentBlock {
+  return { id: gid(), type: 'audio', uri };
+}

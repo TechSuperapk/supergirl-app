@@ -21,22 +21,35 @@ export function StepSlider({ value, onChange, min = 1, max = 10, leftLabel, righ
   const { colors } = useTheme();
   const [, setW] = useState(0);
   const wRef = useRef(0);
+  // Continuous drag position (0..1) kept in state so the thumb follows the
+  // finger smoothly; the reported value still snaps to the nearest step.
+  const [dragPct, setDragPct] = useState<number | null>(null);
 
-  const compute = (x: number) => {
+  const ratioAt = (x: number) => {
     const width = wRef.current || 1;
-    const ratio = Math.max(0, Math.min(1, x / width));
-    return Math.round(min + ratio * (max - min));
+    return Math.max(0, Math.min(1, x / width));
+  };
+  const apply = (x: number) => {
+    const ratio = ratioAt(x);
+    setDragPct(ratio);
+    onChange(Math.round(min + ratio * (max - min)));
   };
 
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => onChange(compute(e.nativeEvent.locationX)),
-    onPanResponderMove:  (e) => onChange(compute(e.nativeEvent.locationX)),
+    // Claim horizontal drags so a parent ScrollView doesn't steal them.
+    onMoveShouldSetPanResponderCapture: () => true,
+    onPanResponderGrant: (e) => apply(e.nativeEvent.locationX),
+    onPanResponderMove:  (e) => apply(e.nativeEvent.locationX),
+    onPanResponderRelease: () => setDragPct(null),
+    onPanResponderTerminate: () => setDragPct(null),
   })).current;
 
   const onLayout = (e: LayoutChangeEvent) => { wRef.current = e.nativeEvent.layout.width; setW(e.nativeEvent.layout.width); };
-  const pct = (value - min) / (max - min);
+  // While dragging, use the continuous position for a smooth thumb; otherwise
+  // reflect the snapped value.
+  const pct = dragPct != null ? dragPct : (value - min) / (max - min);
 
   return (
     <View>

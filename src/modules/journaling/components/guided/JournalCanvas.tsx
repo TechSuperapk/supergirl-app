@@ -25,6 +25,7 @@ import { HighlightedText } from './HighlightedText';
 import { AttachmentGrid } from './AttachmentGrid';
 import { AttachmentRef } from '../../attachmentOrder';
 import { StickerLayer, StaticStickerLayer } from './StickerLayer';
+import { VoiceWidget } from '../VoiceWidgets';
 
 export type TextAlignH = 'left' | 'center' | 'right';
 
@@ -50,6 +51,7 @@ export interface JournalCanvasProps {
   blockRefs?: React.MutableRefObject<Map<string, TextInput | null>>;
   onDeleteImageBlock?: (id: string) => void;
   onPressImageBlock?: (id: string) => void;
+  onDeleteAudioBlock?: (id: string) => void;
 
   // Scribble blocks only store a pageId — the actual paths live in the
   // entry's scribblePages, same storage as before, just referenced inline
@@ -94,7 +96,7 @@ export function JournalCanvas(props: JournalCanvasProps) {
     editable, th, colors,
     title, onChangeTitle,
     blocks, onChangeBlockText, onFocusBlock, onSelectionChangeBlock, blockRefs,
-    onDeleteImageBlock, onPressImageBlock,
+    onDeleteImageBlock, onPressImageBlock, onDeleteAudioBlock,
     scribblePages, onPressScribbleBlock, onDeleteScribbleBlock,
     textColor, fontSize, bold, italic, underline, textAlign,
     mood, onPressMood,
@@ -115,7 +117,10 @@ export function JournalCanvas(props: JournalCanvasProps) {
   };
 
   return (
-    <View style={[s.canvas, { backgroundColor: '#FFFFFF' }]}>
+    // Write area uses the SAME colour as the screen background (th.bg) for a
+    // themed entry, so the text area blends in with no distinct shade. The
+    // 'default' theme (card === #FFFFFF) keeps the white write area as before.
+    <View style={[s.canvas, { backgroundColor: th.card === '#FFFFFF' ? '#FFFFFF' : th.bg }]}>
       {tags.length > 0 && (
         <View style={s.tagsRow}>
           {tags.map(t => (
@@ -186,6 +191,19 @@ export function JournalCanvas(props: JournalCanvasProps) {
                     </TouchableOpacity>
                   )}
                 </View>
+              );
+            }
+
+            if (b.type === 'audio') {
+              // Inline voice note — Telegram-style player, playable any time.
+              // In edit mode the × removes it; read-only just plays.
+              return (
+                <VoiceWidget
+                  key={b.id}
+                  uri={b.uri ?? ''}
+                  accent={th.accent}
+                  onDelete={editable && onDeleteAudioBlock ? () => onDeleteAudioBlock(b.id) : undefined}
+                />
               );
             }
 

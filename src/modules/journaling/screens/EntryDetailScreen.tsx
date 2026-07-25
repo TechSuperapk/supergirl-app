@@ -12,11 +12,12 @@ import { useOfflineJournal } from '../offline/useOfflineJournal';
 import { JournalStackParamList } from '../../../navigation/JournalNavigator';
 import { JOURNAL_THEMES } from '../types';
 import { blocksFromEntry } from '../contentBlocks';
-import { JournalCanvas } from '../components/guided';
+import { JournalCanvas, GuidedPreview, AttachmentGrid } from '../components/guided';
 import { ALL_TYPES, JOURNAL_TYPE_ICONS } from '../components/home';
 import { Image as ExpoImage } from 'expo-image';
 import { mergeAttachments } from '../attachmentOrder';
 import { SCRIBBLE_VIEW_BOX } from '../scribbleConstants';
+import { verifyVaultSecret } from '../utils/vaultCrypto';
 import CalendarLogo from '../../../../assets/images/CalenderTopLogo';
 
 // Read-only canvas needs a `colors` shape ({border, textMuted}) the same way
@@ -50,7 +51,12 @@ function VoiceWidget({uri,accent}:{uri:string;accent:string}) {
         if(st.didJustFinish){setPlaying(false);setPos(0);}
       });
       await sound.playAsync();
-    }catch(e){}
+    }catch(e){
+      // Don't leave the UI stuck showing "playing" when the file/codec fails.
+      console.warn('Voice note playback failed:', e);
+      setPlaying(false);
+      Alert.alert('Playback failed', "This voice note couldn't be played.");
+    }
   };
   const stop=async()=>{if(soundRef.current){await soundRef.current.stopAsync();setPlaying(false);}};
   const bars=Array.from({length:28},(_,i)=>Math.sin(i*0.7)*0.4+0.3+((i*13)%5)*0.05);
@@ -74,7 +80,7 @@ export function EntryDetailScreen({navigation,route}:Props) {
   const { removeEntry }=useOfflineJournal();
   const allEntries=useSelector((s:RootState)=>s.journal.entries);
   const entry=allEntries.find(e=>e.id===route.params.entryId);
-  const vaultPin=useSelector((s:RootState)=>s.journal.vaultPin);
+  const vaultPinHash=useSelector((s:RootState)=>s.journal.vaultPinHash);
   const [preview,setPreview]=useState<{url:string;isVid:boolean}|null>(null);
   const [scribPreview,setScribPreview]=useState<any|null>(null);
   const [pinModal,setPinModal]=useState(false);
@@ -114,6 +120,9 @@ export function EntryDetailScreen({navigation,route}:Props) {
   const categoryIcon=ALL_TYPES.find(t=>t.key===entry.category)?.emoji;
   const categoryIconGif=entry.category?JOURNAL_TYPE_ICONS[entry.category]:undefined;
   const categoryLabel=entry.category?`${cap(entry.category)} Journal`:'Journal';
+  // Guided entries render a structured question/answer preview (grey question,
+  // black answer) instead of the freeform canvas.
+  const isGuidedPreview = entry.mode==='guided' && !!entry.guidedData && GUIDED_TYPES.has(entry.category ?? '');
 
   // Ordered text/image blocks — prefers entry.contentBlocks (written by the
   // current WYSIWYG editor); entries saved before inline images existed get
@@ -157,15 +166,13 @@ export function EntryDetailScreen({navigation,route}:Props) {
   const openOptions=()=>{
     if(!entry) return;
     Alert.alert('Journal Options', undefined, [
-      { text: entry.isFavorite?'Remove from Favorites':'Add to Favorites', onPress:toggleFavorite },
-      { text: entry.isPrivate?'Move to Public Journal':'Move to Private Journal', onPress:()=>{ setPinAction(entry.isPrivate?'toPublic':'toPrivate'); setPinModal(true); } },
       { text:'Delete', style:'destructive', onPress:handleDelete },
       { text:'Cancel', style:'cancel' },
     ]);
   };
 
-  const handlePinConfirm=async()=>{
-    if(pin===vaultPin){
+  const handlePinConfirm=async(candidate:string=pin)=>{
+    if(await verifyVaultSecret('pin',candidate,vaultPinHash)){
       try {
         const toPrivate = pinAction==='toPrivate';
         await updateJournalEntryFields(entry.id, { isPrivate: toPrivate });
@@ -237,7 +244,11 @@ export function EntryDetailScreen({navigation,route}:Props) {
                   onPress={()=>{
                     if(k==='⌫'){setPin(p=>p.slice(0,-1));setPinErr('');return;}
                     const next=pin+k;setPin(next);setPinErr('');
-                    if(next.length===4) setTimeout(()=>{ if(next===vaultPin){handlePinConfirm();}else{setPinErr('Wrong PIN');setPin('');} },100);
+                    // handlePinConfirm(next) does its own hash check and sets
+                    // pinErr on a mismatch — passing next explicitly instead
+                    // of relying on the `pin` state avoids the async setState
+                    // race (state wouldn't have caught up to `next` yet here).
+                    if(next.length===4) setTimeout(()=>{ handlePinConfirm(next); },100);
                   }}>
                   <Text style={[s.pinKeyT,{fontFamily:F}]}>{k==='.'?'':k==='⌫'?'⌫':k}</Text>
                 </TouchableOpacity>
@@ -250,50 +261,38 @@ export function EntryDetailScreen({navigation,route}:Props) {
         </View>
       </Modal>
 
-      {/* Header — mirrors GuidedHeader from the editor exactly: back arrow +
-          date pill on top, icon + category name below. The edit/options
-          icons ride alongside the date pill since a read-only view still
-          needs a way in to those actions. */}
+      {/* Header — single line: back arrow · journal type (icon + name) ·
+          edit · options. The calendar/date pill was removed. */}
       <View style={[s.header,{backgroundColor:th.bg}]}>
-        <View style={s.topRow}>
+        <View style={s.headerRow}>
           <TouchableOpacity onPress={()=>navigation.goBack()} activeOpacity={0.7} hitSlop={{top:10,bottom:10,left:10,right:10}}>
             <Text style={[s.back,{color:th.accent}]}>‹</Text>
           </TouchableOpacity>
-          <View style={s.topRight}>
-            <View style={[s.datePill,{borderColor:th.accent+'40',backgroundColor:th.card}]}>
-              <CalendarLogo width={18} height={20} />
-              <Text style={[s.dateLabelT,{fontFamily:F}]}>{dateLabel}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={()=>{
-                // Morning/Night/Dream/Vent were written on the Guided/
-                // Freestyle screen — edit them there too, so Save,
-                // attachments, stickers etc. keep working exactly like they
-                // did when the entry was first created, instead of dropping
-                // into the older plain editor.
-                if (GUIDED_TYPES.has(entry.category)) {
-                  navigation.navigate('GuidedEntry', { entryId: entry.id, category: entry.category });
-                } else {
-                  navigation.navigate('WriteEntry', { entryId: entry.id });
-                }
-              }}
-              style={s.iconBtn}
-            >
-              <Text style={{fontSize:18}}>✏️</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={openOptions} style={s.iconBtn}>
-              <Text style={[s.moreDots,{color:th.accent}]}>•••</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={s.titleRow}>
           {categoryIconGif ? (
             <ExpoImage source={categoryIconGif} style={s.categoryIconGif} contentFit="contain" autoplay />
           ) : (
             !!categoryIcon&&<Text style={s.categoryIcon}>{categoryIcon}</Text>
           )}
           <Text style={[s.categoryLabel,{color:'#111',fontFamily:FB}]} numberOfLines={1}>{categoryLabel}</Text>
+          <View style={{flex:1}} />
+          <TouchableOpacity
+            onPress={()=>{
+              // Morning/Night/Dream/Vent were written on the Guided/Freestyle
+              // screen — edit them there too so Save, attachments, stickers
+              // etc. keep working exactly like when the entry was created.
+              if (entry.category && GUIDED_TYPES.has(entry.category)) {
+                navigation.navigate('GuidedEntry', { entryId: entry.id, category: entry.category });
+              } else {
+                navigation.navigate('WriteEntry', { entryId: entry.id });
+              }
+            }}
+            style={s.iconBtn}
+          >
+            <Text style={{fontSize:18}}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openOptions} style={s.iconBtn}>
+            <Text style={[s.moreDots,{color:th.accent}]}>•••</Text>
+          </TouchableOpacity>
         </View>
 
         {(entry.isPrivate||entry.isImportant||entry.isFavorite)&&(
@@ -317,6 +316,9 @@ export function EntryDetailScreen({navigation,route}:Props) {
             legacy attachments, freeform images and stickers all land at the
             exact saved position/style, pixel for pixel identical to
             GuidedEntryScreen. */}
+        {isGuidedPreview ? (
+          <GuidedPreview entry={entry} dateLabel={dateLabel} />
+        ) : (
         <JournalCanvas
           editable={false}
           th={th}
@@ -344,9 +346,25 @@ export function EntryDetailScreen({navigation,route}:Props) {
           onPressLegacyVideo={uri => setPreview({ url: uri, isVid: true })}
           onPressLegacyScribble={pageId => setScribPreview((entry.scribblePages ?? []).find(p => p.id === pageId))}
         />
+        )}
 
         {/* Voice note */}
-        {!!entry.voiceNoteUrl&&<VoiceWidget uri={entry.voiceNoteUrl} accent={th.accent}/>}
+        {/* All voice clips (voiceNoteUrls), falling back to the legacy single field. */}
+        {(entry.voiceNoteUrls ?? (entry.voiceNoteUrl ? [entry.voiceNoteUrl] : [])).map((u,i)=>(
+          <VoiceWidget key={`${u}_${i}`} uri={u} accent={th.accent}/>
+        ))}
+
+        {/* Guided entries: photos/videos below the voice note, like the design. */}
+        {isGuidedPreview && allAttachments.length>0 && (
+          <View style={{paddingHorizontal:20, marginTop:4}}>
+            <AttachmentGrid
+              items={allAttachments}
+              onPressImage={uri=>setPreview({url:uri,isVid:false})}
+              onPressVideo={uri=>setPreview({url:uri,isVid:true})}
+              onPressScribble={pageId=>setScribPreview((entry.scribblePages ?? []).find(p=>p.id===pageId))}
+            />
+          </View>
+        )}
 
         <View style={{height:16}}/>
       </ScrollView>
@@ -395,8 +413,9 @@ const s=StyleSheet.create({
   // top, icon + category name below), with the pencil/••• actions riding
   // alongside the date pill.
   header:{paddingHorizontal:20,paddingTop:4,paddingBottom:12},
+  headerRow:{flexDirection:'row',alignItems:'center',gap:6},
   topRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
-  back:{fontSize:32,marginTop:-4},
+  back:{fontSize:32,marginTop:-2},
   topRight:{flexDirection:'row',alignItems:'center',gap:4},
   datePill:{flexDirection:'row',alignItems:'center',gap:5,borderWidth:1,borderRadius:12,paddingHorizontal:12,paddingVertical:8},
   dateLabelT:{fontSize:13,color:'#111'},
@@ -405,7 +424,7 @@ const s=StyleSheet.create({
   titleRow:{flexDirection:'row',alignItems:'center',marginTop:8,gap:6,alignSelf:'flex-start',maxWidth:'100%'},
   categoryIcon:{fontSize:24},
   categoryIconGif:{width:28,height:28},
-  categoryLabel:{fontSize:22,flexShrink:1},
+  categoryLabel:{fontSize:20,flexShrink:1},
   badgeRow:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},
   privBadge:{backgroundColor:'#F3E5F5',borderRadius:12,paddingHorizontal:12,paddingVertical:5,alignSelf:'flex-start'},
   privBadgeT:{fontSize:13,color:'#7B1FA2'},

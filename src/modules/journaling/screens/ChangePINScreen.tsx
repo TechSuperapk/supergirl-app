@@ -5,9 +5,10 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSelector,useDispatch} from 'react-redux';
 import {RootState} from '../../../store';
-import {setVaultPin,setSecurityQuestions} from '../store/journalSlice';
+import {setVaultPinHash,setSecurityQuestionHashes} from '../store/journalSlice';
 import {PrivateStackParamList} from '../../../navigation/PrivateNavigator';
 import {saveVaultData} from '../services/journalDbService';
+import {hashVaultSecret,verifyVaultSecret} from '../utils/vaultCrypto';
 import {SECURITY_QUESTIONS} from '../types';
 import DropdownIcon from '../../../../assets/DropdownIcon';
 
@@ -18,7 +19,7 @@ type Step='current'|'new'|'confirm'|'security';
 export function ChangePINScreen() {
   const dispatch=useDispatch();
   const navigation=useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
-  const storedPin=useSelector((s:RootState)=>s.journal.vaultPin);
+  const storedPinHash=useSelector((s:RootState)=>s.journal.vaultPinHash);
   const userId=useSelector((s:RootState)=>s.auth.user?.id);
   const [step,setStep]=useState<Step>('current');
   const [pin,setPin]=useState('');
@@ -40,21 +41,32 @@ export function ChangePINScreen() {
     if(key==='.')return;
     const next=pin+key;setPin(next);setError('');
     if(next.length===4){
-      setTimeout(()=>{
-        if(step==='current'){if(next===storedPin){setPin('');setStep('new');}else wrong('Incorrect current PIN.');}
+      setTimeout(async ()=>{
+        if(step==='current'){
+          if(await verifyVaultSecret('pin',next,storedPinHash)){setPin('');setStep('new');}
+          else wrong('Incorrect current PIN.');
+        }
         else if(step==='new'){setNewPin(next);setPin('');setStep('confirm');}
         else if(step==='confirm'){
-          if(next===newPin){dispatch(setVaultPin(next));setPin('');setStep('security');}
+          if(next===newPin){
+            const pinHash=await hashVaultSecret('pin',next);
+            dispatch(setVaultPinHash(pinHash));setPin('');setStep('security');
+          }
           else{wrong("PINs don't match.");setStep('new');setNewPin('');}
         }
       },100);
     }
   };
 
-  const handleSaveSecurity=()=>{
+  const handleSaveSecurity=async ()=>{
     if(!selQ1||ans1.trim().length<2){Alert.alert('Required','Please select question 1 and provide an answer.');return;}
-    dispatch(setSecurityQuestions({q1:selQ1,a1:ans1,q2:selQ2,a2:ans2}));
-    if(userId) saveVaultData(userId,{pin:newPin,q1:selQ1,a1:ans1.toLowerCase().trim(),q2:selQ2,a2:ans2.toLowerCase().trim()}).catch(e=>console.error('saveVaultData failed:',e));
+    const [a1Hash,a2Hash,pinHash]=await Promise.all([
+      hashVaultSecret('answer',ans1),
+      hashVaultSecret('answer',ans2),
+      hashVaultSecret('pin',newPin),
+    ]);
+    dispatch(setSecurityQuestionHashes({q1:selQ1,a1Hash,q2:selQ2,a2Hash}));
+    if(userId) saveVaultData(userId,{pinHash,q1:selQ1,a1Hash,q2:selQ2,a2Hash}).catch(e=>console.error('saveVaultData failed:',e));
     Alert.alert('✅ Done!','PIN and security questions saved.',[{text:'OK',onPress:()=>navigation.replace('PrivateJournal')}]);
   };
 

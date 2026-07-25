@@ -5,6 +5,7 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { Colors }    from '../../../shared/theme/colors';
 import { Spacing, Radius, Shadows } from '../../../shared/theme/spacing';
 import { Event }     from '../types';
+import { useSavedEvents } from '../store/savedEventsStore';
 
 interface Props {
   event:    Event;
@@ -32,6 +33,8 @@ function minTicketPrice(event: Event): string {
 
 export function EventCard({ event, onPress, onTicket }: Props) {
   const isPast = new Date(event.endDate) < new Date();
+  const isSaved = useSavedEvents(st => !!st.saved[event.id]);
+  const toggleSave = useSavedEvents(st => st.toggle);
 
   return (
     // Shadow lives on this outer wrapper (no overflow:'hidden' here) — the
@@ -53,6 +56,14 @@ export function EventCard({ event, onPress, onTicket }: Props) {
             {new Date(event.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase()}
           </AppText>
         </View>
+        {/* Save / like heart */}
+        <TouchableOpacity
+          style={s.heart}
+          onPress={toggleSave.bind(null, event.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <AppText style={{ fontSize: 18 }}>{isSaved ? '❤️' : '🤍'}</AppText>
+        </TouchableOpacity>
         {isPast && (
           <View style={s.pastOverlay}>
             <AppText variant="caption" color={Colors.white}>Event ended</AppText>
@@ -118,6 +129,12 @@ const s = StyleSheet.create({
     backgroundColor: Colors.club,
     borderRadius: Radius.sm,
     paddingHorizontal: 10, paddingVertical: 5,
+  },
+  heart: {
+    position: 'absolute', top: 10, right: 10,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center', justifyContent: 'center',
   },
   pastOverlay: {
     ...StyleSheet.absoluteFillObject,

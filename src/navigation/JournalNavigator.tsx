@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { JournalTabNavigator } from './JournalTabNavigator';
+import { HomeScreen }        from '../modules/journaling/screens/HomeScreen';
+import { JournalListScreen } from '../modules/journaling/screens/JournalListScreen';
 import { WriteEntryScreen }  from '../modules/journaling/screens/WriteEntryScreen';
 import { GuidedEntryScreen } from '../modules/journaling/screens/GuidedEntryScreen';
 import { NoteEditorScreen }  from '../modules/journaling/screens/NoteEditorScreen';
@@ -12,6 +13,7 @@ import type { ScribblePath } from '../modules/journaling/types';
 
 export type JournalStackParamList = {
   Journal:     undefined;
+  Entries:     undefined;
   WriteEntry:  { entryId?: string; private?: boolean; title?: string; theme?: string; category?: string; skipMood?: boolean };
   GuidedEntry: { category?: string; title?: string; theme?: string; entryId?: string };
   NoteEditor:  { noteId?: string; tag?: string };
@@ -33,7 +35,13 @@ export function JournalNavigator() {
       initialRouteName="Journal"
       screenOptions={{ headerShown:false, contentStyle:{backgroundColor:'#F5F5F5'}, gestureEnabled:false }}
     >
-      <Stack.Screen name="Journal"     component={JournalTabNavigator} options={{ headerShown:false }}/>
+      {/* Journal home is the landing screen now — the old internal Home/
+          Journal/Notes/Calendar tab bar is removed; the app's main bottom nav
+          (Me/Journal/Goals/Fits/Club) is used instead. Notes & Calendar are
+          hidden for now. */}
+      <Stack.Screen name="Journal"     component={HomeScreen} options={{ headerShown:false }}/>
+      <Stack.Screen name="Entries"     component={JournalListScreen}
+        options={{ headerShown:false, animation:'slide_from_right' }}/>
       <Stack.Screen name="WriteEntry"  component={WriteEntryScreen}
         options={{ headerShown:false, animation:'slide_from_bottom', gestureEnabled:true, contentStyle:{backgroundColor:'#FFFFFF'} }}/>
       <Stack.Screen name="GuidedEntry" component={GuidedEntryScreen}

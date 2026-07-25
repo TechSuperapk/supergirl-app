@@ -28,12 +28,7 @@ export function AllTypesSheet({ visible, onSelect, onClose }: Props) {
             {PRIMARY_TYPES.map(t => (
               <BigTypeCard key={t.key} item={t} onPress={() => onSelect(t)} />
             ))}
-
-            <View style={s.smallRow}>
-              {SECONDARY_TYPES.map(t => (
-                <SmallTypeCard key={t.key} item={t} onPress={() => onSelect(t)} />
-              ))}
-            </View>
+            {/* Quotes / Ideas / Affirmation intentionally hidden. */}
           </ScrollView>
 
           <TouchableOpacity style={s.cancel} activeOpacity={0.7} onPress={onClose}>

@@ -1,14 +1,15 @@
 import React, { useCallback } from 'react';
 import {
-  View, FlatList, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity, Image,
   StyleSheet, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector }  from 'react-redux';
+import Svg, { Circle }  from 'react-native-svg';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootState }     from '../../../store';
-import { useClubFeed }   from '../hooks/useClub';
+import { useHomeFeed, useClubEvents } from '../hooks/useClub';
 import { PostCard }      from '../components/PostCard';
 import { AppText }       from '../../../shared/components/AppText';
 import { AppEmptyState } from '../../../shared/components/AppEmptyState';
@@ -16,75 +17,168 @@ import { AppLoadingSpinner } from '../../../shared/components/AppLoadingSpinner'
 import { AppAvatar }     from '../../../shared/components/AppAvatar';
 import { AppTopNav }     from '../../../shared/components/AppTopNav';
 import { Colors }        from '../../../shared/theme/colors';
-import { Spacing }       from '../../../shared/theme/spacing';
-import { Post }          from '../types';
+import { FontFamily }    from '../../../shared/theme/typography';
+import { Spacing, Radius, Shadows } from '../../../shared/theme/spacing';
+import { Post, Event }   from '../types';
+import { SAMPLE_FEED }   from '../sampleFeed';
 
-// Navigation type — ClubFeed stack param list defined in types.ts
+// Usage ring for the banner (static template values — the app doesn't track
+// per-module session time; matches the design's "89% Used" dial).
+function UsageRing({ pct = 0.89 }: { pct?: number }) {
+  const R = 30, C = 2 * Math.PI * R;
+  return (
+    <View style={{ width: 74, height: 74, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={74} height={74} style={StyleSheet.absoluteFill}>
+        <Circle cx={37} cy={37} r={R} stroke="rgba(255,255,255,0.16)" strokeWidth={7} fill="none" />
+        <Circle
+          cx={37} cy={37} r={R} stroke="#FFCF0D" strokeWidth={7} fill="none"
+          strokeDasharray={C} strokeDashoffset={C * (1 - pct)} strokeLinecap="round"
+          transform="rotate(-90 37 37)"
+        />
+      </Svg>
+      <Text style={ss.ringPct}>{Math.round(pct * 100)}<Text style={ss.ringPctSm}>%</Text></Text>
+      <Text style={ss.ringSub}>Used</Text>
+    </View>
+  );
+}
+
+// ── ClubFeedScreen — the Club module's Home screen (spec 2.1) ─────────────────
+// This is the cross-community "Recent Threads" feed (useHomeFeed — every post
+// from every community the user has joined, Baehive included by default),
+// not the single-community feed shown on an individual club's own page
+// (CommunityDetailScreen uses useCommunityFeed for that instead).
+//
+// Simplification: the spec's header banner includes a "usage ring" stat
+// (e.g. time-spent-today). Nothing in this app tracks per-module session
+// time anywhere, and adding that tracking is out of scope for this pass —
+// the banner below shows a joined-communities count instead, which is real
+// data already available from useHomeFeed/useCommunities.
 type Props = NativeStackScreenProps<any, 'ClubFeed'>;
+
+function upcomingEvents(events: Event[]): Event[] {
+  return events
+    .filter(e => new Date(e.endDate) >= new Date())
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+}
 
 export function ClubFeedScreen({ navigation }: Props) {
   const user = useSelector((s: RootState) => s.auth.user);
   const {
-    feed, loading, refreshing, hasMore,
+    homeFeed, loading, refreshing, hasMore,
     loadMore, refresh, likePost, savePost, removePost,
-  } = useClubFeed();
+  } = useHomeFeed();
+  const { events } = useClubEvents();
+  const popular = upcomingEvents(events).slice(0, 6);
+
+  // When the live feed is empty (fresh account / no posts yet), show the
+  // template threads so the home screen matches the design. These are
+  // read-only — no Firestore writes — so their like/save/open handlers no-op.
+  const usingSample = !loading && homeFeed.length === 0;
+  const feedData    = usingSample ? SAMPLE_FEED : homeFeed;
 
   const renderPost = useCallback(({ item }: { item: Post }) => (
     <PostCard
       post={item}
       currentUserId={user?.id ?? ''}
-      onPress={()  => navigation.navigate('PostDetail', { postId: item.id })}
-      onLike={()   => likePost(item.id)}
-      onSave={()   => savePost(item.id)}
-      onComment={() => navigation.navigate('PostDetail', { postId: item.id })}
-      onDelete={item.authorId === user?.id ? () => removePost(item.id) : undefined}
+      onPress={()  => usingSample ? undefined : navigation.navigate('PostDetail', { postId: item.id })}
+      onLike={()   => usingSample ? undefined : likePost(item.id)}
+      onSave={()   => usingSample ? undefined : savePost(item.id)}
+      onComment={() => usingSample ? undefined : navigation.navigate('PostDetail', { postId: item.id })}
+      onDelete={!usingSample && item.authorId === user?.id ? () => removePost(item.id) : undefined}
     />
-  ), [user?.id, likePost, savePost, removePost]);
+  ), [user?.id, likePost, savePost, removePost, navigation, usingSample]);
 
-  return (
-    <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Top nav — identical on every feature's home screen.
-          Note: Club isn't mounted under the root tab navigator yet, so this
-          screen currently can only be reached in isolation (e.g. dev/preview). */}
-      <AppTopNav active="club" onBellPress={() => {}} onMenuPress={() => {}} />
-
-      {/* Header */}
-      <View style={s.header}>
-        <AppText variant="headingLarge" color={Colors.textPrimary}>Club</AppText>
-        <View style={s.headerRight}>
+  const PopularEvents = popular.length > 0 ? (
+    <View style={s.eventsSection}>
+      <View style={s.sectionHeaderRow}>
+        <AppText variant="headingMedium" color={Colors.textPrimary}>Popular Events</AppText>
+        <TouchableOpacity onPress={() => navigation.getParent()?.navigate('Hangouts')}>
+          <AppText variant="label" color={Colors.textMuted}>View More</AppText>
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        data={popular}
+        keyExtractor={e => e.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm }}
+        renderItem={({ item }) => (
           <TouchableOpacity
-            style={s.avatarBtn}
-            onPress={() => navigation.navigate('CreatePost', {})}
+            style={s.eventCard}
+            onPress={() => navigation.getParent()?.navigate('Hangouts', { screen: 'EventDetail', params: { eventId: item.id } })}
+            activeOpacity={0.9}
           >
-            <View style={s.newPostBtn}>
-              <AppText style={{ fontSize: 18 }}>✏️</AppText>
+            <View style={s.eventCover}>
+              {item.coverUrl
+                ? <Image source={{ uri: item.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                : <View style={[StyleSheet.absoluteFill, s.eventCoverPlaceholder]}>
+                    <AppText style={{ fontSize: 28 }}>🎉</AppText>
+                  </View>
+              }
             </View>
+            <AppText variant="label" color={Colors.textPrimary} numberOfLines={1} style={{ marginTop: Spacing.sm }}>
+              {item.title}
+            </AppText>
+            <AppText variant="caption" color={Colors.textMuted} numberOfLines={1}>
+              {new Date(item.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              {' · '}{item.attendeeCount} going
+            </AppText>
           </TouchableOpacity>
-          <AppAvatar uri={user?.avatarUrl} name={user?.name} size={36} />
+        )}
+      />
+    </View>
+  ) : null;
+
+  const ListHeader = (
+    <View>
+      {/* Black hero banner */}
+      <View style={s.banner}>
+        <View style={s.bannerGlow} />
+        <AppText style={s.bannerText}>Your Tribe.{'\n'}Your People.{'\n'}Your Safe Space.</AppText>
+        <View style={s.bannerRight}>
+          <UsageRing pct={0.89} />
+          <AppText style={s.bannerNew}>22 New this month ✨</AppText>
         </View>
       </View>
 
-      {/* Stories strip placeholder */}
-      <View style={s.storiesStrip}>
-        <TouchableOpacity
-          style={s.storyAdd}
-          onPress={() => navigation.navigate('CreatePost', {})}
-        >
-          <View style={s.storyAddCircle}>
-            <AppText style={{ fontSize: 22 }}>+</AppText>
+      {/* Add Forum compose prompt */}
+      <View style={s.addForumCard}>
+        <View style={s.addForumLeft}>
+          <AppAvatar uri={user?.avatarUrl} name={user?.name} size={46} />
+          <View>
+            <AppText variant="headingSmall" color={Colors.textPrimary}>{user?.name ?? 'You'}</AppText>
+            <AppText variant="body" color={Colors.textMuted}>What's new?</AppText>
           </View>
-          <AppText variant="caption" color={Colors.textMuted}>Post</AppText>
+        </View>
+        <TouchableOpacity style={s.addForumBtn} onPress={() => navigation.navigate('CreatePost', {})} activeOpacity={0.85}>
+          <Text style={s.addForumPlus}>+</Text>
+          <AppText variant="label" color={Colors.textPrimary}>Add Forum</AppText>
         </TouchableOpacity>
       </View>
+    </View>
+  );
+
+  const ListFooter = (
+    <View>
+      {PopularEvents}
+      {hasMore ? <AppLoadingSpinner size="small" /> : null}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Top nav — identical on every feature's home screen. */}
+      <AppTopNav active="club" onBellPress={() => {}} onMenuPress={() => {}} />
 
       {/* Feed */}
-      {loading && feed.length === 0 ? (
+      {loading && homeFeed.length === 0 ? (
         <AppLoadingSpinner fullscreen message="Loading feed…" />
       ) : (
         <FlatList
-          data={feed}
+          data={feedData}
           keyExtractor={item => item.id}
           renderItem={renderPost}
+          ListHeaderComponent={ListHeader}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -103,11 +197,9 @@ export function ClubFeedScreen({ navigation }: Props) {
               onAction={() => navigation.navigate('CreatePost', {})}
             />
           }
-          ListFooterComponent={
-            hasMore ? <AppLoadingSpinner size="small" /> : null
-          }
+          ListFooterComponent={ListFooter}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={feed.length === 0 ? { flex: 1 } : undefined}
+          contentContainerStyle={feedData.length === 0 ? { flex: 1 } : undefined}
         />
       )}
 
@@ -136,37 +228,80 @@ const s = StyleSheet.create({
     borderBottomColor: Colors.divider,
   },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  avatarBtn:   {},
   newPostBtn: {
     width: 36, height: 36, borderRadius: 10,
     borderWidth: 1.5, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  storiesStrip: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
+  sectionHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.base, paddingTop: Spacing.base, paddingBottom: Spacing.sm,
+  },
+  eventsSection: { paddingBottom: Spacing.sm },
+  eventCard: {
+    width: 140,
     backgroundColor: Colors.bgCard,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.divider,
-    gap: Spacing.base,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    ...Shadows.sm,
   },
-  storyAdd:   { alignItems: 'center', gap: 4 },
-  storyAddCircle: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.bgInput,
-    borderWidth: 1.5, borderColor: Colors.border,
-    borderStyle: 'dashed',
+  eventCover: {
+    width: '100%', height: 80, borderRadius: Radius.sm,
+    backgroundColor: Colors.bgInput, overflow: 'hidden',
+  },
+  eventCoverPlaceholder: {
     alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.club + '15',
   },
+
+  // Black hero banner
+  banner: {
+    marginHorizontal: Spacing.sm, marginTop: Spacing.sm,
+    backgroundColor: '#141414', borderRadius: 26,
+    paddingVertical: Spacing.base, paddingHorizontal: Spacing.lg,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    overflow: 'hidden', minHeight: 132,
+  },
+  bannerGlow: {
+    position: 'absolute', top: -110, left: 0,
+    width: 170, height: 170, borderRadius: 85,
+    backgroundColor: '#E4FFFE', opacity: 0.16,
+  },
+  bannerText: { flex: 1, color: Colors.white, fontFamily: FontFamily.bold, fontSize: 18, lineHeight: 26 },
+  bannerRight: { alignItems: 'center', gap: 6 },
+  bannerNew:  { color: Colors.white, fontFamily: FontFamily.medium, fontSize: 10 },
+
+  // Add Forum card
+  addForumCard: {
+    marginHorizontal: Spacing.sm, marginTop: Spacing.md, marginBottom: Spacing.xs,
+    backgroundColor: Colors.bgCard, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(153,153,153,0.20)',
+    padding: Spacing.base,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    ...Shadows.sm,
+  },
+  addForumLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  addForumBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(153,153,153,0.20)',
+  },
+  addForumPlus: { fontSize: 18, color: Colors.textPrimary, fontFamily: FontFamily.bold, marginTop: -2 },
+
   fab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.club,
+    backgroundColor: '#141414',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.club,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45, shadowRadius: 12, elevation: 10,
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 10,
   },
   fabIcon: { fontSize: 22 },
+});
+
+const ss = StyleSheet.create({
+  ringPct:   { color: Colors.white, fontFamily: FontFamily.bold, fontSize: 19, lineHeight: 22 },
+  ringPctSm: { fontSize: 9, fontFamily: FontFamily.medium },
+  ringSub:   { color: 'rgba(255,255,255,0.85)', fontFamily: FontFamily.medium, fontSize: 8, marginTop: -2 },
 });

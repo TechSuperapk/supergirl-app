@@ -18,13 +18,13 @@ import { useNavigation } from '@react-navigation/native';
 import { AppTopBar } from './AppTopBar';
 import { JournalTopTabs, TopTabKey } from '../../modules/journaling/components/home';
 
-// Root-tab screen name for each module-switcher key. 'club' is intentionally
-// left out — Club isn't mounted under the root tab navigator yet.
+// Root-tab screen name for each module-switcher key.
 const ROOT_TARGETS: Partial<Record<TopTabKey, string>> = {
   me:      'Profile',
   journal: 'Journal',
   goals:   'Trackers',
   fits:    'Fits',
+  club:    'Club',
 };
 
 interface Props {

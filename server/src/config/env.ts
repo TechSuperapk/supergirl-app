@@ -19,4 +19,30 @@ export const env = {
 
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
+
+  // ── AWS SNS phone OTP (replaces Firebase phone auth) ──────────────────────
+  awsRegion:      process.env.AWS_REGION ?? 'ap-south-1',
+  snsSenderId:    process.env.SNS_SENDER_ID ?? '',      // optional, where supported
+  otpTtlMinutes:  parseInt(process.env.OTP_TTL_MINUTES ?? '5', 10),
+
+  // ── AI Digital Wardrobe (Milestone 2) ─────────────────────────────────────
+  // Kept server-side ONLY — never shipped to the RN client. All wardrobe AI /
+  // weather calls go through this proxy so the keys can't be extracted.
+  openaiApiKey:     process.env.OPENAI_API_KEY ?? '',
+  openaiModel:      process.env.OPENAI_MODEL ?? 'gpt-4o',
+  geminiApiKey:     process.env.GEMINI_API_KEY ?? '',        // optional fallback
+  removeBgApiKey:   process.env.REMOVEBG_API_KEY ?? '',
+  removeBgProvider: (process.env.REMOVEBG_PROVIDER ?? 'removebg') as 'removebg' | 'clipdrop',
+  clipdropApiKey:   process.env.CLIPDROP_API_KEY ?? '',
+  openWeatherApiKey: process.env.OPENWEATHER_API_KEY ?? '',
+
+  // Scheduled "Outfit of the Day" batch (00 06 * * * by default). Off unless enabled.
+  ootdCronEnabled:  (process.env.OOTD_CRON_ENABLED ?? 'false') === 'true',
+  ootdCronSchedule: process.env.OOTD_CRON_SCHEDULE ?? '0 6 * * *',
+
+  // ── Razorpay (Club event ticket payments) ─────────────────────────────────
+  // key_id is public (used by the checkout on the client); key_secret is
+  // server-only and used to create orders + verify the payment signature.
+  razorpayKeyId:     process.env.RAZORPAY_KEY_ID ?? '',
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET ?? '',
 };

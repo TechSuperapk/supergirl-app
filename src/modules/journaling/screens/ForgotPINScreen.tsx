@@ -5,8 +5,10 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSelector,useDispatch} from 'react-redux';
 import {RootState} from '../../../store';
-import {setVaultPin} from '../store/journalSlice';
+import {setVaultPinHash} from '../store/journalSlice';
 import {PrivateStackParamList} from '../../../navigation/PrivateNavigator';
+import {saveVaultData} from '../services/journalDbService';
+import {hashVaultSecret,verifyVaultSecret} from '../utils/vaultCrypto';
 
 const C={blue:'#2979FF',bg:'#F2F2F7',white:'#FFFFFF',black:'#111111',grey:'#666',lgrey:'#CCCCCC',red:'#EF5350',green:'#4CAF50'};
 const KEYS=['1','2','3','4','5','6','7','8','9','.','0','⌫'];
@@ -15,10 +17,11 @@ type Step='verify_q1'|'verify_q2'|'new_pin'|'confirm_pin'|'success';
 export function ForgotPINScreen() {
   const dispatch=useDispatch();
   const navigation=useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
+  const userId=useSelector((s:RootState)=>s.auth.user?.id);
   const q1=useSelector((s:RootState)=>s.journal.securityQuestion1);
-  const a1=useSelector((s:RootState)=>s.journal.securityAnswer1);
+  const a1Hash=useSelector((s:RootState)=>s.journal.securityAnswer1Hash);
   const q2=useSelector((s:RootState)=>s.journal.securityQuestion2);
-  const a2=useSelector((s:RootState)=>s.journal.securityAnswer2);
+  const a2Hash=useSelector((s:RootState)=>s.journal.securityAnswer2Hash);
   const [step,setStep]=useState<Step>('verify_q1');
   const [ans1,setAns1]=useState('');[ans1,setAns1];
   const [ans2,setAns2]=useState('');
@@ -29,9 +32,15 @@ export function ForgotPINScreen() {
 
   const wrong=(msg:string)=>{Vibration.vibrate(300);setShake(true);setError(msg);setTimeout(()=>setShake(false),600);};
 
-  const handleVerify=()=>{
-    if(step==='verify_q1'){if(ans1.trim().toLowerCase()===a1){setError('');setStep(q2?'verify_q2':'new_pin');}else wrong('Incorrect answer.');}
-    else if(step==='verify_q2'){if(ans2.trim().toLowerCase()===a2){setError('');setStep('new_pin');}else wrong('Incorrect answer.');}
+  const handleVerify=async ()=>{
+    if(step==='verify_q1'){
+      if(await verifyVaultSecret('answer',ans1,a1Hash)){setError('');setStep(q2?'verify_q2':'new_pin');}
+      else wrong('Incorrect answer.');
+    }
+    else if(step==='verify_q2'){
+      if(await verifyVaultSecret('answer',ans2,a2Hash)){setError('');setStep('new_pin');}
+      else wrong('Incorrect answer.');
+    }
   };
 
   const handlePINKey=(key:string)=>{
@@ -40,8 +49,16 @@ export function ForgotPINScreen() {
     if(step==='new_pin'){const next=newPin+key;setNewPin(next);if(next.length===4)setTimeout(()=>setStep('confirm_pin'),100);}
     else if(step==='confirm_pin'){
       const next=confPin+key;setConfPin(next);
-      if(next.length===4){setTimeout(()=>{
-        if(next===newPin){dispatch(setVaultPin(next));setStep('success');}
+      if(next.length===4){setTimeout(async ()=>{
+        if(next===newPin){
+          const pinHash=await hashVaultSecret('pin',next);
+          dispatch(setVaultPinHash(pinHash));
+          // Previously this only updated local Redux state and never
+          // persisted the reset PIN to Firestore, so a reset on one device
+          // silently reverted the next time /vaults synced down elsewhere.
+          if(userId) saveVaultData(userId,{pinHash}).catch(e=>console.error('saveVaultData failed:',e));
+          setStep('success');
+        }
         else{Vibration.vibrate(300);setShake(true);setError("PINs don't match.");setConfPin('');setTimeout(()=>setShake(false),600);}
       },100);}
     }

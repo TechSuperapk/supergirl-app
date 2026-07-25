@@ -9,15 +9,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JournalNavigator }  from './JournalNavigator';   // existing
 import { ProfileNavigator }  from './ProfileNavigator';
+import { ClubNavigator }     from './ClubNavigator';
 import { UnderDevelopmentScreen } from '../shared/components/UnderDevelopmentScreen';
 
 import { Colors }     from '../shared/theme/colors';
 import { FontFamily, FontSize } from '../shared/theme/typography';
 import { MainTabParamList }  from './types';
+// Same icon set as the top module switcher (JournalTopTabs).
+import HomeIcon     from '../../assets/images/HomeIcon';
+import JournalLogos from '../../assets/images/JournalLogos';
+import TrackersLogo from '../../assets/images/TrackersLogo';
+import OutfitsLogo  from '../../assets/images/OutfitsLogo';
+import ClubLogo     from '../../assets/images/ClubLogo';
 
 // Screens that should hide the main tab bar (full-screen editors, write screens etc.)
 const HIDE_FOR_ROUTES = new Set([
-  'WriteEntry', 'GuidedEntry', 'NoteEditor', 'EntryDetail', 'Scribble',
+  'WriteEntry', 'GuidedEntry', 'NoteEditor', 'EntryDetail', 'Scribble', 'Entries',
   'OutfitBuilder', 'BoardEditor', 'AvatarBuilder',
   'GroupChat',
 ]);
@@ -28,11 +35,15 @@ function shouldHideTabBar(route: any): boolean {
 }
 
 // ── Tab icons (emoji-based, replace with SVG icons per module as they're built) ──
-const TAB_ICONS: Record<keyof MainTabParamList, { emoji: string; label: string; color: string }> = {
-  Journal:  { emoji: '📓', label: 'Journal',  color: Colors.journal  },
-  Fits:     { emoji: '👗', label: 'Fits',     color: Colors.fits     },
-  Trackers: { emoji: '📊', label: 'Trackers', color: Colors.trackers },
-  Profile:  { emoji: '👤', label: 'Profile',  color: Colors.profile  },
+// Design bottom nav: Me · Journal · Goals · Fits · Club — same icons as the
+// top module switcher. (Me = Profile, Goals = Trackers — route names kept.)
+type TabIcon = React.FC<{ width?: number; height?: number }>;
+const TAB_ICONS: Record<keyof MainTabParamList, { Icon: TabIcon; label: string; color: string }> = {
+  Profile:  { Icon: HomeIcon,     label: 'Me',      color: Colors.profile  },
+  Journal:  { Icon: JournalLogos, label: 'Journal', color: Colors.journal  },
+  Trackers: { Icon: TrackersLogo, label: 'Goals',   color: Colors.trackers },
+  Fits:     { Icon: OutfitsLogo,  label: 'Fits',    color: Colors.fits     },
+  Club:     { Icon: ClubLogo,     label: 'Club',    color: Colors.club     },
 };
 
 // ── Custom tab bar ────────────────────────────────────────────────────────────
@@ -44,9 +55,18 @@ function SuperGirlTabBar({ state, descriptors, navigation }: BottomTabBarProps) 
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 8);
 
-  // Journal owns its own bottom bar (Home/Calendar/Search/Private); modules
-  // switch from the top row, so hide the parent module bar while in Journal.
-  if (state.routes[state.index]?.name === 'Journal') return null;
+  // Club keeps its own custom bottom bar (Home/Baehive/Groups/Hangouts), so the
+  // root bar hides while in Club to avoid stacking two bars. Journal now uses
+  // THIS root bar (its old internal tab bar was removed).
+  const rootRouteName = state.routes[state.index]?.name;
+  if (rootRouteName === 'Club') return null;
+
+  // Hide the WHOLE bar (not just one button) when the focused screen opted out
+  // via tabBarStyle:{display:'none'} — e.g. Journal's list/editor/preview
+  // screens (Entries, WriteEntry, GuidedEntry, NoteEditor, EntryDetail).
+  const focusedKey = state.routes[state.index]?.key;
+  const focusedTabStyle = focusedKey ? (descriptors[focusedKey].options as any).tabBarStyle : undefined;
+  if (focusedTabStyle?.display === 'none') return null;
 
   return (
     <View style={[tb.container, { height: TAB_CONTENT_H + bottomPad, paddingBottom: bottomPad }]}>
@@ -54,9 +74,6 @@ function SuperGirlTabBar({ state, descriptors, navigation }: BottomTabBarProps) 
         const { options }   = descriptors[route.key];
         const isFocused     = state.index === index;
         const meta          = TAB_ICONS[route.name as keyof MainTabParamList];
-        const tabStyle      = (options as any).tabBarStyle;
-
-        if (tabStyle?.display === 'none') return null;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -76,15 +93,13 @@ function SuperGirlTabBar({ state, descriptors, navigation }: BottomTabBarProps) 
             style={tb.tab}
             activeOpacity={0.75}
           >
-            {/* active indicator pill */}
-            {isFocused && (
-              <View style={[tb.pill, { backgroundColor: meta.color + '18' }]} />
-            )}
-            <Text style={[tb.emoji, isFocused && tb.emojiActive]}>{meta.emoji}</Text>
+            {/* Active indicator — a short black line at the top of the tab. */}
+            <View style={[tb.topLine, { backgroundColor: isFocused ? '#141414' : 'transparent' }]} />
+            <meta.Icon width={44} height={44} />
             <Text
               style={[
                 tb.label,
-                { color: isFocused ? meta.color : Colors.textLight },
+                { color: isFocused ? '#141414' : Colors.textLight },
                 isFocused && tb.labelActive,
               ]}
             >
@@ -111,19 +126,21 @@ export function MainAppNavigator() {
   return (
     <Tab.Navigator
       id="RootTabs"
+      initialRouteName="Journal"
       tabBar={(props) => <SuperGirlTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
+      {/* Order matches the design: Me · Journal · Goals · Fits · Club */}
       <Tab.Screen
-        name="Journal"
-        component={JournalNavigator}
+        name="Profile"
+        component={ProfileNavigator}
         options={({ route }) => ({
           tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
         })}
       />
       <Tab.Screen
-        name="Fits"
-        component={FitsPlaceholder}
+        name="Journal"
+        component={JournalNavigator}
         options={({ route }) => ({
           tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
         })}
@@ -136,8 +153,15 @@ export function MainAppNavigator() {
         })}
       />
       <Tab.Screen
-        name="Profile"
-        component={ProfileNavigator}
+        name="Fits"
+        component={FitsPlaceholder}
+        options={({ route }) => ({
+          tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
+        })}
+      />
+      <Tab.Screen
+        name="Club"
+        component={ClubNavigator}
         options={({ route }) => ({
           tabBarStyle: shouldHideTabBar(route) ? { display: 'none' } : undefined,
         })}
@@ -149,7 +173,7 @@ export function MainAppNavigator() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 // Fixed part of the bar (icon + label + top padding); the safe-area bottom
 // inset is added per-device at render time above.
-const TAB_CONTENT_H = 58;
+const TAB_CONTENT_H = 74;
 
 const tb = StyleSheet.create({
   container: {
@@ -173,12 +197,12 @@ const tb = StyleSheet.create({
     gap:            2,
     position:       'relative',
   },
-  pill: {
-    position:     'absolute',
-    top:          -4,
-    width:        44,
-    height:       44,
-    borderRadius: 22,
+  topLine: {
+    position: 'absolute',
+    top:      -8,
+    width:    28,
+    height:   3,
+    borderRadius: 2,
   },
   emoji:       { fontSize: 22 },
   emojiActive: { transform: [{ scale: 1.1 }] },

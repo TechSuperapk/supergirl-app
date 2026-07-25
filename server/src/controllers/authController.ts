@@ -1,9 +1,72 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { verifyFirebaseIdToken } from '../config/firebaseAdmin';
 import { UserModel } from '../models/User';
+import { OtpModel } from '../models/Otp';
 import { signSessionToken } from '../utils/jwt';
-import { verifySchema, updateProfileSchema } from '../validators/authValidators';
+import { sendSms } from '../services/snsService';
+import { env } from '../config/env';
+import { verifySchema, updateProfileSchema, sendOtpSchema, verifyOtpSchema } from '../validators/authValidators';
 import { AppError } from '../utils/AppError';
+
+const hashCode = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
+const countryCodeOf = (phone: string) => (phone.match(/^\+(\d{1,3})/)?.[0] ?? '+91');
+
+/** POST /api/auth/otp/send  Body: { phone }
+ *  Generates a 6-digit code, stores it hashed (5-min TTL), and texts it via
+ *  Amazon SNS. Replaces Firebase phone auth. */
+export async function sendOtp(req: Request, res: Response) {
+  const { phone } = sendOtpSchema.parse(req.body);
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
+
+  await OtpModel.findOneAndUpdate(
+    { phone },
+    { phone, codeHash: hashCode(code), attempts: 0, expiresAt },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  await sendSms(phone, `Your Super Bae verification code is ${code}. It expires in ${env.otpTtlMinutes} minutes.`);
+  res.json({ ok: true });
+}
+
+/** POST /api/auth/otp/verify  Body: { phone, code, name? }
+ *  Checks the code, upserts a Mongo user keyed by phone, returns our JWT. */
+export async function verifyOtp(req: Request, res: Response) {
+  const { phone, code, name } = verifyOtpSchema.parse(req.body);
+
+  const rec = await OtpModel.findOne({ phone });
+  if (!rec) throw new AppError(400, 'Please request a new code.');
+  if (rec.expiresAt.getTime() < Date.now()) { await rec.deleteOne(); throw new AppError(400, 'Code expired. Request a new one.'); }
+  if (rec.attempts >= 5) { await rec.deleteOne(); throw new AppError(429, 'Too many attempts. Request a new code.'); }
+  if (rec.codeHash !== hashCode(code)) {
+    rec.attempts += 1;
+    await rec.save();
+    throw new AppError(400, 'Incorrect code.');
+  }
+  await rec.deleteOne();
+
+  // Users are keyed by phone in the firebaseUid field (reused as a generic
+  // unique id) so no schema change is needed while both auth methods coexist.
+  const uidKey = `phone:${phone}`;
+  let user = await UserModel.findOne({ firebaseUid: uidKey });
+  if (!user) {
+    user = await UserModel.create({
+      firebaseUid: uidKey,
+      phone,
+      countryCode: countryCodeOf(phone),
+      name: name ?? '',
+      isVerified: true,
+    });
+  } else if (name && !user.name) {
+    user.name = name;
+    await user.save();
+  }
+
+  const token = signSessionToken({ userId: user._id.toString(), uid: uidKey, phone });
+  res.json({ token, user: user.toJSON() });
+}
 
 /** POST /api/auth/verify
  *  Body: { idToken, name? }

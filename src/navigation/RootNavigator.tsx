@@ -7,6 +7,7 @@ import { loadEntries, loadVault, loadDrafts, updateEntry } from '../modules/jour
 import { subscribeToJournalEntries, subscribeToVault, subscribeToDrafts } from '../modules/journaling/services/journalDbService';
 import { saveBackup, getBestBackup, pushRestoredToServer } from '../modules/journaling/services/backupService';
 import { initBackupSystem, teardownBackupSystem } from '../backup';
+import { ensureDefaultCommunity } from '../modules/club/services/clubFirestoreService';
 import { startJournalSync, stopJournalSync } from '../modules/journaling/offline/journalSync';
 import { startNotesSync, stopNotesSync } from '../modules/journaling/offline/notesSync';
 import { mergeServerWithLocal, RichJournals } from '../modules/journaling/offline/richJournalStore';
@@ -73,6 +74,16 @@ export function RootNavigator() {
     if (!isLoggedIn || !user?.id) return;
     initBackupSystem(user.id);
     return () => teardownBackupSystem();
+  }, [isLoggedIn, user?.id]);
+
+  // Club: auto-join every user to the default Baehive community on login,
+  // creating the community doc itself the very first time anyone logs in.
+  // Fire-and-forget + swallow errors — this is a one-time idempotent setup
+  // step (ensureDefaultCommunity no-ops once both docs exist), not something
+  // that should block or crash the rest of the app if it transiently fails.
+  useEffect(() => {
+    if (!isLoggedIn || !user?.id) return;
+    ensureDefaultCommunity(user.id).catch((e) => console.warn('ensureDefaultCommunity failed', e));
   }, [isLoggedIn, user?.id]);
 
   // Auto-backup: debounce-save entries to local + server whenever they change.

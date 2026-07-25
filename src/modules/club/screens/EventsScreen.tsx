@@ -17,9 +17,29 @@ import { AppEmptyState }  from '../../../shared/components/AppEmptyState';
 import { Colors }         from '../../../shared/theme/colors';
 import { Spacing, Radius, Shadows } from '../../../shared/theme/spacing';
 import { Event }          from '../types';
+import { useSavedEvents } from '../store/savedEventsStore';
 
 // ── EventsListScreen ──────────────────────────────────────────────────────────
 type ListProps = NativeStackScreenProps<any, 'EventsList'>;
+
+// Reusable Hangouts top bar: title + "My Tickets" + saved/liked heart.
+function HangoutsHeader({ navigation, title = 'Hangouts' }: { navigation: ListProps['navigation']; title?: string }) {
+  const savedCount = useSavedEvents(st => Object.keys(st.saved).length);
+  return (
+    <View style={s.header}>
+      <AppText variant="headingLarge" color={Colors.textPrimary}>{title}</AppText>
+      <View style={s.headerActions}>
+        <TouchableOpacity style={s.myTicketsBtn} activeOpacity={0.8} onPress={() => navigation.navigate('MyTickets')}>
+          <AppText style={{ fontSize: 15 }}>🎟️</AppText>
+          <AppText variant="label" color={Colors.textPrimary}>My Tickets</AppText>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.heartBtn} activeOpacity={0.8} onPress={() => navigation.navigate('SavedEvents')}>
+          <AppText style={{ fontSize: 20 }}>{savedCount > 0 ? '❤️' : '🤍'}</AppText>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 export function EventsListScreen({ navigation }: ListProps) {
   const { events, loading } = useClubEvents();
@@ -28,9 +48,7 @@ export function EventsListScreen({ navigation }: ListProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.header}>
-        <AppText variant="headingLarge" color={Colors.textPrimary}>Events</AppText>
-      </View>
+      <HangoutsHeader navigation={navigation} />
 
       {loading ? (
         <AppLoadingSpinner fullscreen message="Loading events…" />
@@ -78,6 +96,38 @@ export function EventsListScreen({ navigation }: ListProps) {
           <View style={{ height: Spacing['3xl'] }} />
         </ScrollView>
       )}
+    </SafeAreaView>
+  );
+}
+
+// ── SavedEventsScreen ─────────────────────────────────────────────────────────
+export function SavedEventsScreen({ navigation }: ListProps) {
+  const { events } = useClubEvents();
+  const saved = useSavedEvents(st => st.saved);
+  const savedEvents = events.filter(e => saved[e.id]);
+
+  return (
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <View style={s.subHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <AppText style={{ fontSize: 28, color: Colors.textPrimary }}>‹</AppText>
+        </TouchableOpacity>
+        <AppText variant="headingMedium" color={Colors.textPrimary}>Saved Events</AppText>
+        <View style={{ width: 24 }} />
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {savedEvents.length > 0 ? savedEvents.map(event => (
+          <EventCard
+            key={event.id}
+            event={event}
+            onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}
+            onTicket={() => navigation.navigate('EventDetail', { eventId: event.id })}
+          />
+        )) : (
+          <AppEmptyState emoji="🤍" title="No saved events" subtitle="Tap the heart on an event to save it here." />
+        )}
+        <View style={{ height: Spacing['3xl'] }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -194,7 +244,7 @@ export function EventDetailScreen({ route, navigation }: DetailProps) {
       {!isPast && (
         <View style={s.ctaBar}>
           <AppButton
-            label={buying ? 'Processing…' : 'Get Tickets'}
+            label={buying ? 'Processing…' : 'Book Ticket'}
             onPress={() => setShowModal(true)}
             loading={buying}
             variant="primary"
@@ -220,7 +270,7 @@ export function EventDetailScreen({ route, navigation }: DetailProps) {
               <TouchableOpacity
                 key={tt.id}
                 style={s.modalOption}
-                onPress={() => handleBuy(tt.id, tt.name)}
+                onPress={() => { setShowModal(false); navigation.navigate('ReviewBooking', { eventId: event.id, ticketTypeId: tt.id }); }}
               >
                 <View style={{ flex: 1 }}>
                   <AppText variant="headingSmall" color={Colors.textPrimary}>{tt.name}</AppText>
@@ -247,6 +297,20 @@ const s = StyleSheet.create({
   },
   scroll:         { paddingBottom: 40 },
   sectionLabel:   { paddingHorizontal: Spacing.base, marginTop: Spacing.base, marginBottom: 4 },
+  headerActions:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  myTicketsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  heartBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  subHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm,
+  },
   cover:          { height: 240, backgroundColor: Colors.bgInput, justifyContent: 'flex-end' },
   coverPlaceholder:{ alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.club + '15' },
   backBtnCover: {

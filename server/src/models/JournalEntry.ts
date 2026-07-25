@@ -69,7 +69,8 @@ export interface IJournalEntry {
   mood: string;
   tags: string[];
   mediaUrls: string[];
-  voiceNoteUrl?: string;
+  voiceNoteUrl?: string; // legacy single clip — mirrors voiceNoteUrls[0]
+  voiceNoteUrls?: string[]; // all voice clips, in recorded order
   stickers: string[];
   stickerPlacements: any[];
   scribblePages: any[];
@@ -107,6 +108,7 @@ const JournalEntrySchema = new Schema(
     tags:              { type: [String], default: [] },
     mediaUrls:         { type: [String], default: [] },
     voiceNoteUrl:      { type: String },
+    voiceNoteUrls:     { type: [String] },
     stickers:          { type: [String], default: [] },
     stickerPlacements: { type: [StickerPlacementSchema], default: [] },
     scribblePages:     { type: [ScribblePageSchema], default: [] },

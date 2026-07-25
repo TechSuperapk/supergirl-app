@@ -6,8 +6,10 @@ import { Image } from 'expo-image';
 import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing, Radius } from '../../../../shared/theme/spacing';
+import { FontFamily } from '../../../../shared/theme/typography';
 import CalendarLogo from '../../../../../assets/images/CalenderTopLogo';
 import { ALL_TYPES, JOURNAL_TYPE_ICONS } from '../home';
+import { Caret } from '../Caret';
 
 interface Props {
   title:      string;
@@ -40,7 +42,6 @@ export function GuidedHeader({ title, subtitle, dateLabel, typeKey, onBack, onPr
         <TouchableOpacity style={[s.datePill, { borderColor: colors.border, backgroundColor: colors.bgCard }]} activeOpacity={0.8} onPress={onPressDate}>
           <CalendarLogo width={18} height={20} />
           <AppText variant="bodySmall" color={colors.textPrimary} numberOfLines={1}>{dateLabel}</AppText>
-          <AppText variant="bodySmall" color={colors.textMuted}> ⌄</AppText>
         </TouchableOpacity>
       </View>
 
@@ -57,12 +58,18 @@ export function GuidedHeader({ title, subtitle, dateLabel, typeKey, onBack, onPr
           ) : (
             !!iconEmoji && <Text style={s.icon}>{iconEmoji}</Text>
           )}
-          <AppText variant="headingLarge" color={colors.textPrimary} numberOfLines={1} style={s.title}>{title}</AppText>
-          {!!onPressTitle && <AppText variant="headingLarge" color={colors.textMuted}> ⌄</AppText>}
+          {/* Title + subtitle stacked so the subtitle starts under the title
+              text (e.g. "Morning …"), not under the icon. */}
+          <View style={s.titleTextCol}>
+            <View style={s.titleLine}>
+              <AppText variant="headingMedium" color={colors.textPrimary} numberOfLines={1} style={s.title}>{title.replace(/\s*journal$/i, '')}</AppText>
+              {!!onPressTitle && <Caret size={14} color={colors.textMuted} style={s.titleCaret} />}
+            </View>
+            <AppText variant="bodySmall" color={colors.textMuted} style={s.subtitle} numberOfLines={2}>{subtitle}</AppText>
+          </View>
         </TouchableOpacity>
         {!!rightSlot && <View style={s.rightSlot}>{rightSlot}</View>}
       </View>
-      <AppText variant="bodySmall" color={colors.textMuted} style={s.subtitle} numberOfLines={2}>{subtitle}</AppText>
     </View>
   );
 }
@@ -75,10 +82,19 @@ const s = StyleSheet.create({
   // off-screen on narrow phones.
   datePill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 8, flexShrink: 1, minWidth: 0, maxWidth: '70%' },
   titleWrapRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 },
-  icon: { fontSize: 24 },
-  iconGif: { width: 28, height: 28 },
-  title: { flexShrink: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
+  // Column beside the icon: title line on top, subtitle beneath it (so the
+  // subtitle starts under the title, not the icon).
+  titleTextCol: { flexShrink: 1, minWidth: 0 },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  icon: { fontSize: 46 },
+  iconGif: { width: 56, height: 56 },
+  // Journal type name — a touch smaller than headingMedium, with a hair of
+  // letter-spacing so it reads a shade heavier next to the bigger icon.
+  title: { flexShrink: 1, fontSize: 18, lineHeight: 22, fontFamily: 'DMSansFlex', fontWeight: '680', letterSpacing: 0.2 },
+  // The "⌄" glyph sits low inside its line box; nudge up so it's optically
+  // centred against the title text rather than reading low.
+  titleCaret: { marginTop: -6 },
   rightSlot: { marginLeft: Spacing.sm, flexShrink: 0 },
   subtitle: { marginTop: 2 },
 });

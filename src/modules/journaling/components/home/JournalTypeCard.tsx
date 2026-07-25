@@ -220,11 +220,11 @@ const s = StyleSheet.create({
   // always render as heavy as an actual separate Bold font file would —
   // pairing it with an explicit numeric fontWeight pushes the rendered
   // weight further (most visibly on Android).
-  labelBig:   { fontSize: 17, lineHeight: 21, fontFamily: 'DMSans-Bold', fontWeight: '650' },
+  labelBig:   { fontSize: 17, lineHeight: 21, fontFamily: 'DMSansFlex', fontWeight: '680' },
   // Fixed (smaller) size for all three small cards so "Affirmation" — the
   // one word long enough to need adjustsFontSizeToFit's shrink — sets the
   // size, and "Quotes"/"Ideas" render at that same size instead of staying
   // at their own full, unshrunk size. That's what was making the three
   // cards look mismatched.
-  labelSmall: { marginTop: Spacing.xs, fontSize: 14, lineHeight: 18, fontFamily: 'DMSans-Bold', fontWeight: '650' },
+  labelSmall: { marginTop: Spacing.xs, fontSize: 14, lineHeight: 18, fontFamily: 'DMSansFlex', fontWeight: '680' },
 });

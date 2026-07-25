@@ -11,16 +11,20 @@ interface Props {
   saveLabel: string;
   onSave: () => void;
   onAttach?: () => void;
+  /** Journal-theme colours — when the entry has a theme selected, the bar
+   *  and Save button pick it up so the theme applies immediately. */
+  accent?: string;
+  surface?: string;
 }
 
-export function BottomSaveBar({ saveLabel, onSave, onAttach }: Props) {
+export function BottomSaveBar({ saveLabel, onSave, onAttach, accent, surface }: Props) {
   const { colors } = useTheme();
   return (
-    <View style={[s.bar, { backgroundColor: colors.bgCard, borderTopColor: colors.divider }]}>
+    <View style={[s.bar, { backgroundColor: surface ?? colors.bgCard, borderTopColor: colors.divider }]}>
       <TouchableOpacity style={[s.attach, { borderColor: colors.border, backgroundColor: colors.bgInput }]} activeOpacity={0.7} onPress={onAttach}>
         <Text style={s.attachIcon}>📎</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[s.save, { backgroundColor: colors.textPrimary }]} activeOpacity={0.85} onPress={onSave}>
+      <TouchableOpacity style={[s.save, { backgroundColor: accent ?? colors.textPrimary }]} activeOpacity={0.85} onPress={onSave}>
         <AppText variant="button" color={colors.bgCard}>{saveLabel}</AppText>
       </TouchableOpacity>
     </View>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator,
@@ -9,6 +9,7 @@ import { loginSuccess }   from '../store/authSlice';
 import { sendOtp, verifyOtp } from '../services/authService';
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
 import DropdownIcon from '../../../../assets/DropdownIcon';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 const F  = 'DMSans-Regular';
 const FB = 'DMSans-Bold';
@@ -38,37 +39,17 @@ export function LoginScreen({ onLogin }: Props) {
   const selCC = COUNTRY_CODES.find(c => c.code === cc) ?? COUNTRY_CODES[0];
   const fullPhone = `${cc}${phone.replace(/\D/g, '')}`;
 
-  const handleSendOtp = async () => {
-    if (phone.length < 6) {
-      Alert.alert('Invalid number', 'Enter a valid phone number');
-      return;
-    }
-    if (mode === 'signup' && !name.trim()) {
-      Alert.alert('Name required', 'Enter your name to continue');
-      return;
-    }
+  // Shared tail of BOTH verification paths (manual code entry and Android
+  // auto-verification). Idempotent via `completingRef` so the auto path
+  // racing a manual verify can't run the backend exchange twice.
+  const completingRef = useRef(false);
+  const completeSignIn = useCallback(async (fbUser: FirebaseAuthTypes.User) => {
+    if (completingRef.current) return;
+    completingRef.current = true;
     setLoading(true);
     try {
-      await sendOtp(fullPhone);
-      setStep('otp');
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to send OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (otp.length !== 6) {
-      Alert.alert('Invalid OTP', 'Enter the 6-digit OTP');
-      return;
-    }
-    setLoading(true);
-    try {
-      // 1. Confirm the SMS code with Firebase — this is the real phone auth check.
-      const fbUser = await verifyOtp(otp);
-      // 2. Hand the resulting Firebase ID token to our backend, which verifies
-      //    it server-side (Firebase Admin) and mints our own session JWT.
+      // Hand the Firebase ID token to our backend, which verifies it
+      // server-side (Firebase Admin) and mints our own session JWT.
       const idToken = await fbUser.getIdToken();
       const backendUser = await exchangeFirebaseTokenForSession(idToken, mode === 'signup' ? name : undefined);
 
@@ -89,10 +70,68 @@ export function LoginScreen({ onLogin }: Props) {
         onLogin();
       }
     } catch (e: any) {
+      completingRef.current = false;
       Alert.alert('Verification Failed', e.message ?? 'Please check the code and try again.');
     } finally {
       setLoading(false);
     }
+  }, [dispatch, mode, name, fullPhone, cc, onLogin]);
+
+  const handleSendOtp = async () => {
+    if (phone.length < 6) {
+      Alert.alert('Invalid number', 'Enter a valid phone number');
+      return;
+    }
+    if (mode === 'signup' && !name.trim()) {
+      Alert.alert('Name required', 'Enter your name to continue');
+      return;
+    }
+    setLoading(true);
+    try {
+      // completeSignIn doubles as the Android auto-verification handler —
+      // if Firebase reads the SMS and verifies silently, we log in
+      // directly instead of leaving a dead confirmation behind (the old
+      // "session expired seconds after the SMS arrived" bug).
+      await sendOtp(fullPhone, completeSignIn);
+      setStep('otp');
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) {
+      Alert.alert('Invalid OTP', 'Enter the 6-digit OTP');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Confirm the SMS code with Firebase — the real phone auth check —
+      // then run the shared completion path.
+      const fbUser = await verifyOtp(otp);
+      await completeSignIn(fbUser);
+    } catch (e: any) {
+      Alert.alert('Verification Failed', e.message ?? 'Please check the code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dev-only: skip login entirely and enter the app with a local mock user.
+  // Handy in Expo Go (no native phone-auth module) and for quick UI testing.
+  // Gated behind __DEV__ so it never appears in a release/Play Store build.
+  const handleDevSkip = () => {
+    dispatch(loginSuccess({
+      id:          'dev_' + (phone.replace(/\D/g, '') || '9999999999'),
+      name:        name || 'SuperGirl User',
+      phone:       fullPhone || '+919999999999',
+      countryCode: cc,
+      createdAt:   new Date().toISOString(),
+      isVerified:  true,
+    }));
+    onLogin();
   };
 
   // ── Welcome screen ──────────────────────────────────────────────────────────
@@ -243,6 +282,13 @@ export function LoginScreen({ onLogin }: Props) {
               </Text>
             </Text>
           </TouchableOpacity>
+
+          {/* Dev-only: skip login and enter the app directly. */}
+          {__DEV__ && (
+            <TouchableOpacity onPress={handleDevSkip} style={s.skipRow} activeOpacity={0.7}>
+              <Text style={[s.skipT, { fontFamily: FB }]}>Skip login · Enter (dev)</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -278,4 +324,6 @@ const s = StyleSheet.create({
   switchRow:   { alignItems: 'center', marginTop: 8 },
   switchT:     { fontSize: 14, color: '#888' },
   switchLink:  { color: '#2979FF' },
+  skipRow:     { alignItems: 'center', marginTop: 6, paddingVertical: 10 },
+  skipT:       { fontSize: 14, color: '#2979FF' },
 });

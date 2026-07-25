@@ -5,9 +5,10 @@ import { useNavigation }            from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState }               from '../../../store';
-import { unlockVault, setVaultPin, setSecurityQuestions } from '../store/journalSlice';
+import { unlockVault, setVaultPinHash, setSecurityQuestionHashes } from '../store/journalSlice';
 import { PrivateStackParamList }   from '../../../navigation/PrivateNavigator';
 import { saveVaultData } from '../services/journalDbService';
+import { hashVaultSecret, verifyVaultSecret } from '../utils/vaultCrypto';
 import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const C  = { blue:'#2979FF', bg:'#F2F2F7', white:'#FFFFFF', black:'#111111', grey:'#888888' };
@@ -28,9 +29,9 @@ type Phase = 'enter'|'setup_pin'|'confirm_pin'|'setup_q1'|'setup_q2';
 export function PrivateVaultScreen() {
   const dispatch    = useDispatch();
   const navigation  = useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
-  const storedPin   = useSelector((s:RootState)=>s.journal.vaultPin);
+  const storedPinHash = useSelector((s:RootState)=>s.journal.vaultPinHash);
   const userId      = useSelector((s:RootState)=>s.auth.user?.id);
-  const hasPin      = storedPin !== '1234';  // default pin means not yet set up
+  const hasPin      = !!storedPinHash;  // no hash yet means not set up
   const hasQ        = useSelector((s:RootState)=>!!s.journal.securityQuestion1);
 
   const [phase, setPhase]     = useState<Phase>(hasPin ? 'enter' : 'setup_pin');
@@ -57,7 +58,7 @@ export function PrivateVaultScreen() {
     setTimeout(()=>{ setPin(''); setShake(false); setError(''); }, 700);
   };
 
-  const handleKey = useCallback((key: string) => {
+  const handleKey = useCallback(async (key: string) => {
     if (key==='⌫') { setPin(p=>p.slice(0,-1)); setError(''); return; }
     if (key==='.') return;
     const next = pin + key;
@@ -66,7 +67,7 @@ export function PrivateVaultScreen() {
     if (next.length !== 4) return;
 
     if (phase === 'enter') {
-      if (next === storedPin) {
+      if (await verifyVaultSecret('pin', next, storedPinHash)) {
         dispatch(unlockVault());
         navigation.replace('PrivateJournal');
       } else {
@@ -78,8 +79,9 @@ export function PrivateVaultScreen() {
       setPhase('confirm_pin');
     } else if (phase === 'confirm_pin') {
       if (next === newPin) {
-        dispatch(setVaultPin(newPin));
-        if (userId) saveVaultData(userId, { pin: newPin });
+        const pinHash = await hashVaultSecret('pin', newPin);
+        dispatch(setVaultPinHash(pinHash));
+        if (userId) saveVaultData(userId, { pinHash });
         setPin('');
         setPhase('setup_q1');
       } else {
@@ -87,7 +89,7 @@ export function PrivateVaultScreen() {
         setPin('');
       }
     }
-  }, [pin, phase, storedPin, newPin, dispatch, navigation]);
+  }, [pin, phase, storedPinHash, newPin, dispatch, navigation]);
 
   const saveQ1 = () => {
     if (!inputA.trim()) { Alert.alert('Please enter an answer'); return; }
@@ -96,10 +98,14 @@ export function PrivateVaultScreen() {
     setPhase('setup_q2');
   };
 
-  const saveQ2 = () => {
+  const saveQ2 = async () => {
     if (!inputA.trim()) { Alert.alert('Please enter an answer'); return; }
-    dispatch(setSecurityQuestions({ q1, a1, q2:secQ, a2:inputA.trim() }));
-    if (userId) saveVaultData(userId, { q1, a1: a1.toLowerCase().trim(), q2: secQ, a2: inputA.toLowerCase().trim() });
+    const [a1Hash, a2Hash] = await Promise.all([
+      hashVaultSecret('answer', a1),
+      hashVaultSecret('answer', inputA),
+    ]);
+    dispatch(setSecurityQuestionHashes({ q1, a1Hash, q2: secQ, a2Hash }));
+    if (userId) saveVaultData(userId, { q1, a1Hash, q2: secQ, a2Hash });
     dispatch(unlockVault());
     navigation.replace('PrivateJournal');
   };

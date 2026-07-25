@@ -27,7 +27,7 @@ export const PRIMARY_TYPES: JournalTypeDef[] = [
 export const SECONDARY_TYPES: JournalTypeDef[] = [
   { key: 'quotes', label: 'Quotes',      short: 'Quotes',      emoji: '💬', theme: 'mint',   tint: '#E7F7F1', dot: '#26A69A' },
   { key: 'ideas',  label: 'Ideas',       short: 'Ideas',       emoji: '💡', theme: 'sunset', tint: '#FFF6E0', dot: '#FFCA28' },
-  { key: 'affirm', label: 'Affirmation', short: 'Affirmation', emoji: '✨', theme: 'forest', tint: '#EEF7E6', dot: '#66BB6A' },
+  { key: 'affirm', label: 'Affirmation', short: 'Affirm', emoji: '✨', theme: 'forest', tint: '#EEF7E6', dot: '#66BB6A' },
 ];
 
 export const ALL_TYPES: JournalTypeDef[] = [...PRIMARY_TYPES, ...SECONDARY_TYPES];

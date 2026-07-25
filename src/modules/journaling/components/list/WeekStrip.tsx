@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { AppText } from '../../../../shared/components/AppText';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Spacing } from '../../../../shared/theme/spacing';
+import { Caret } from '../Caret';
 
 interface Props {
   selected: string;                 // yyyy-mm-dd
@@ -29,7 +30,7 @@ export function WeekStrip({ selected, onSelect, markedDays }: Props) {
     <View style={s.wrap}>
       <View style={s.monthRow}>
         <AppText variant="headingSmall" color={colors.textPrimary}>{sel.format('MMM YYYY')}</AppText>
-        <AppText variant="headingSmall" color={colors.textMuted}>  ⌄</AppText>
+        <Caret size={16} color={colors.textMuted} style={{ marginLeft: 4 }} />
       </View>
       <View style={s.week}>
         {week.map((d, i) => {
