@@ -73,7 +73,7 @@ export async function forecastByCoords(lat: number, lon: number): Promise<DailyF
   for (const row of d.list ?? []) {
     const date = String(row.dt_txt ?? '').slice(0, 10);
     if (!date) continue;
-    const entry = byDay.get(date) ?? { temps: [], conditions: [], icon: row.weather?.[0]?.icon ?? '01d' };
+    const entry = byDay.get(date) ?? { temps: [] as number[], conditions: [] as string[], icon: row.weather?.[0]?.icon ?? '01d' };
     entry.temps.push(row.main?.temp ?? 0);
     entry.conditions.push(row.weather?.[0]?.main ?? 'Clear');
     byDay.set(date, entry);

@@ -10,6 +10,7 @@ import { noteRoutes } from './routes/noteRoutes';
 import { aiRoutes } from './routes/aiRoutes';
 import { weatherRoutes } from './routes/weatherRoutes';
 import { paymentRoutes } from './routes/paymentRoutes';
+import { mediaRoutes } from './routes/mediaRoutes';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const MONGO_STATES: Record<number, string> = {
@@ -53,6 +54,8 @@ export function createApp() {
   app.use('/api/ai', aiRoutes);
   app.use('/api/weather', weatherRoutes);
   app.use('/api/payments', paymentRoutes);
+  // S3 media uploads (presigned URLs) — replaces Firebase Storage.
+  app.use('/api/media', mediaRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

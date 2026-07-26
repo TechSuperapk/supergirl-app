@@ -25,6 +25,11 @@ export const env = {
   snsSenderId:    process.env.SNS_SENDER_ID ?? '',      // optional, where supported
   otpTtlMinutes:  parseInt(process.env.OTP_TTL_MINUTES ?? '5', 10),
 
+  // ── AWS S3 media storage (replaces Firebase Storage) ──────────────────────
+  s3Bucket:        process.env.S3_BUCKET ?? '',
+  // Optional CloudFront/base URL; if empty we build the standard S3 URL.
+  s3PublicBaseUrl: process.env.S3_PUBLIC_BASE_URL ?? '',
+
   // ── AI Digital Wardrobe (Milestone 2) ─────────────────────────────────────
   // Kept server-side ONLY — never shipped to the RN client. All wardrobe AI /
   // weather calls go through this proxy so the keys can't be extracted.

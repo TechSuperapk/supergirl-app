@@ -7,12 +7,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/authSlice';
-import { saveUserToFirestore } from '../services/userService';
-import { sendOtp as fbSendOtp, verifyOtp as fbVerifyOtp } from '../services/authService';
-import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
-import { auth } from '../../../lib/firebase';
-import { signInAnonymously } from 'firebase/auth';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { apiClient } from '../../../services/apiClient';
+import { saveSessionToken } from '../services/sessionService';
 import DropdownIcon from '../../../../assets/DropdownIcon';
 
 const { width: SW } = Dimensions.get('window');
@@ -127,38 +123,6 @@ export function OnboardingScreen({ onDone }: Props) {
     setSlide(Math.round(e.nativeEvent.contentOffset.x / SW));
   };
 
-  // Shared tail of BOTH verification paths (manual code entry and Android
-  // auto-verification): exchange the Firebase ID token for our backend
-  // session and land on the welcome step. `completingRef` makes it
-  // idempotent — auto-verify firing while a manual verify is mid-flight
-  // (or vice versa) can't run the exchange twice.
-  const completingRef = useRef(false);
-  const completeSignIn = useCallback(async (fu: FirebaseAuthTypes.User) => {
-    if (completingRef.current) return;
-    completingRef.current = true;
-    setLoading(true);
-    try {
-      const idToken = await fu.getIdToken();
-      const backendUser = await exchangeFirebaseTokenForSession(idToken);
-      dispatch(loginSuccess({
-        id: backendUser.id,
-        name: backendUser.name ?? '',
-        phone: backendUser.phone || `${cc}${phone}`,
-        countryCode: backendUser.countryCode || cc,
-        avatarUrl: backendUser.avatarUrl,
-        bio: backendUser.bio,
-        createdAt: backendUser.createdAt,
-        isVerified: true,
-      }));
-      setStep('welcome');
-    } catch (e: any) {
-      completingRef.current = false;
-      Alert.alert('Verification failed', e?.message ?? 'Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [dispatch, cc, phone]);
-
   // Skip → enter the app as a guest (no phone login). A name is set so the
   // root navigator routes straight to the app instead of the profile setup.
   const handleSkip = () => {
@@ -176,25 +140,15 @@ export function OnboardingScreen({ onDone }: Props) {
   const sendOtp = async () => {
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 6) { Alert.alert('Invalid number', 'Enter a valid mobile number.'); return; }
-    if (USE_REAL_OTP) {
-      setLoading(true);
-      try {
-        // completeSignIn doubles as the auto-verification handler: on
-        // Android, Firebase may verify the SMS silently seconds after it
-        // arrives — previously that consumed the pending confirmation and
-        // made manual entry fail with "session expired" (the reported
-        // "OTP expires in 6-7 seconds" bug). Now it just logs you in.
-        await fbSendOtp(`${cc}${digits}`, completeSignIn);
-        setStep('otp'); setResend(29); setOtp('');
-        setTimeout(() => otpRefs.current[0]?.focus(), 350);
-      } catch (e: any) {
-        Alert.alert('Could not send OTP', e?.message ?? 'Please try again.');
-      } finally { setLoading(false); }
-      return;
-    }
-    // Test mode: any code of OTP_LEN digits verifies.
-    setStep('otp'); setResend(29); setOtp('');
-    setTimeout(() => otpRefs.current[0]?.focus(), 350);
+    setLoading(true);
+    try {
+      // Ask our own backend to text a 6-digit code via Amazon SNS.
+      await apiClient.post('/auth/otp/send', { phone: `${cc}${digits}` }, { auth: false });
+      setStep('otp'); setResend(29); setOtp('');
+      setTimeout(() => otpRefs.current[0]?.focus(), 350);
+    } catch (e: any) {
+      Alert.alert('Could not send OTP', e?.message ?? 'Please try again.');
+    } finally { setLoading(false); }
   };
 
   const verifyOtp = async () => {
@@ -202,28 +156,23 @@ export function OnboardingScreen({ onDone }: Props) {
     setLoading(true);
     try {
       const digits = phone.replace(/\D/g, '');
-      if (USE_REAL_OTP) {
-        // Confirm the SMS code with Firebase, then run the shared
-        // completion path (backend exchange + welcome step).
-        const fu = await fbVerifyOtp(otp);
-        await completeSignIn(fu);
-        return;
-      } else {
-        // Test mode: sign in anonymously so writes have a real auth uid.
-        // Falls back to a local session if Anonymous auth isn't enabled yet.
-        let uid: string;
-        try {
-          const cred = await signInAnonymously(auth);
-          uid = cred.user.uid;
-        } catch (e) {
-          uid = `demo_user_${digits || 'guest'}`;
-        }
-        try { await saveUserToFirestore(uid, `${cc}${phone}`); } catch (e) { /* proceed locally */ }
-        dispatch(loginSuccess({
-          id: uid, name: '', phone: `${cc}${phone}`, countryCode: cc,
-          createdAt: new Date().toISOString(), isVerified: true,
-        }));
-      }
+      // Backend checks the code, creates/returns the user, and issues our JWT.
+      const { token, user } = await apiClient.post<{ token: string; user: any }>(
+        '/auth/otp/verify',
+        { phone: `${cc}${digits}`, code: otp },
+        { auth: false },
+      );
+      await saveSessionToken(token);
+      dispatch(loginSuccess({
+        id: user.id,
+        name: user.name ?? '',
+        phone: user.phone ?? `${cc}${digits}`,
+        countryCode: user.countryCode ?? cc,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        createdAt: user.createdAt,
+        isVerified: true,
+      }));
       setStep('welcome');
     } catch (e: any) {
       Alert.alert('Verification failed', e?.message ?? 'Please try again.');
