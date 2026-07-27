@@ -22,8 +22,19 @@ export const env = {
 
   // ── AWS SNS phone OTP (replaces Firebase phone auth) ──────────────────────
   awsRegion:      process.env.AWS_REGION ?? 'ap-south-1',
-  snsSenderId:    process.env.SNS_SENDER_ID ?? '',      // optional, where supported
+  snsSenderId:    process.env.SNS_SENDER_ID ?? '',      // DLT-approved 6-char header (e.g. SUPBAE)
   otpTtlMinutes:  parseInt(process.env.OTP_TTL_MINUTES ?? '5', 10),
+  // India DLT (TRAI) — required to send SMS to Indian numbers in production.
+  snsEntityId:    process.env.SNS_ENTITY_ID ?? '',      // Principal Entity ID from the DLT portal
+  snsTemplateId:  process.env.SNS_TEMPLATE_ID ?? '',    // registered OTP template ID
+
+  // ── MSG91 SMS (India) — DLT is handled inside MSG91, so this is the easy
+  // path for Indian OTP. When MSG91_AUTHKEY is set, OTP texts go via MSG91
+  // instead of AWS SNS.
+  msg91AuthKey:    process.env.MSG91_AUTHKEY ?? '',
+  msg91TemplateId: process.env.MSG91_TEMPLATE_ID ?? '',  // DLT-approved OTP flow/template id in MSG91
+  msg91SenderId:   process.env.MSG91_SENDER_ID ?? '',    // 6-char header, e.g. SUPBAE (optional if in template)
+  msg91OtpVar:     process.env.MSG91_OTP_VAR ?? 'otp',   // the variable name used in your MSG91 template
 
   // ── AWS S3 media storage (replaces Firebase Storage) ──────────────────────
   s3Bucket:        process.env.S3_BUCKET ?? '',

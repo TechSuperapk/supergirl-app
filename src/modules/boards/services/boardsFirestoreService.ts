@@ -1,56 +1,29 @@
 /**
  * boardsFirestoreService.ts
  *
- * Collection: boards/{boardId}
- * Elements are stored as a JSON array inside the board document.
- * Thumbnails are stored in Firebase Storage.
+ * Now backed by the app's own API (MongoDB) via /api/data/boards instead of
+ * Firestore. The exported function names/signatures are unchanged so callers
+ * don't need edits. Thumbnails/images upload to S3 (via storageService).
  */
-import {
-  collection, doc, addDoc, getDoc, getDocs,
-  updateDoc, deleteDoc, query, where, orderBy,
-  serverTimestamp, Timestamp,
-} from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { listDocs, fetchDoc, createDoc, patchDoc, removeDoc } from '../../../services/dataApi';
 import { uploadFileToFirebase } from '../../../services/storageService';
 import { Board, BoardElement, BoardType } from '../types';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const toIso = (ts: any): string => {
-  if (!ts) return new Date().toISOString();
-  if (ts instanceof Timestamp) return ts.toDate().toISOString();
-  return typeof ts === 'string' ? ts : new Date().toISOString();
-};
-
-function snapToBoard(d: any): Board {
-  const data = d.data();
-  return {
-    id:        d.id,
-    userId:    data.userId,
-    title:     data.title ?? 'Untitled',
-    type:      data.type  ?? 'personal',
-    thumbnail: data.thumbnail ?? undefined,
-    elements:  data.elements  ?? [],
-    isPublic:  data.isPublic  ?? false,
-    bgColor:   data.bgColor   ?? '#FFFFFF',
-    createdAt: toIso(data.createdAt),
-    updatedAt: toIso(data.updatedAt),
-  };
-}
+const COLLECTION = 'boards';
 
 // ── Boards CRUD ───────────────────────────────────────────────────────────────
-export async function fetchBoards(userId: string): Promise<Board[]> {
-  const q    = query(
-    collection(db, 'boards'),
-    where('userId', '==', userId),
-    orderBy('updatedAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(snapToBoard);
+// userId params are kept for signature compatibility but ignored — the backend
+// scopes everything to the signed-in user via the JWT.
+export async function fetchBoards(_userId: string): Promise<Board[]> {
+  return listDocs<Board>(COLLECTION);
 }
 
 export async function fetchBoard(boardId: string): Promise<Board | null> {
-  const snap = await getDoc(doc(db, 'boards', boardId));
-  return snap.exists() ? snapToBoard(snap) : null;
+  try {
+    return await fetchDoc<Board>(COLLECTION, boardId);
+  } catch {
+    return null;
+  }
 }
 
 export async function createBoard(payload: {
@@ -60,49 +33,29 @@ export async function createBoard(payload: {
   bgColor:  string;
   isPublic: boolean;
 }): Promise<Board> {
-  const now = serverTimestamp();
-  const ref = await addDoc(collection(db, 'boards'), {
-    ...payload,
-    elements:  [],
-    thumbnail: null,
-    createdAt: now,
-    updatedAt: now,
-  });
-  return {
-    id:        ref.id,
-    elements:  [],
-    thumbnail: undefined,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...payload,
-  };
+  const { userId, ...fields } = payload;
+  return createDoc<Board>(COLLECTION, { ...fields, elements: [], thumbnail: null });
 }
 
 export async function updateBoardElements(
   boardId:  string,
   elements: BoardElement[],
 ): Promise<void> {
-  await updateDoc(doc(db, 'boards', boardId), {
-    elements,
-    updatedAt: serverTimestamp(),
-  });
+  await patchDoc(COLLECTION, boardId, { elements });
 }
 
 export async function updateBoardMeta(
   boardId: string,
   meta: Partial<Pick<Board, 'title' | 'bgColor' | 'isPublic' | 'thumbnail'>>,
 ): Promise<void> {
-  await updateDoc(doc(db, 'boards', boardId), {
-    ...meta,
-    updatedAt: serverTimestamp(),
-  });
+  await patchDoc(COLLECTION, boardId, meta);
 }
 
 export async function deleteBoard(boardId: string): Promise<void> {
-  await deleteDoc(doc(db, 'boards', boardId));
+  await removeDoc(COLLECTION, boardId);
 }
 
-// ── Thumbnail upload ──────────────────────────────────────────────────────────
+// ── Thumbnail / image uploads (S3 via storageService) ─────────────────────────
 export async function uploadBoardThumbnail(
   userId:   string,
   boardId:  string,
@@ -113,7 +66,6 @@ export async function uploadBoardThumbnail(
   return uploadFileToFirebase(localUri, path);
 }
 
-// ── Board image element upload ────────────────────────────────────────────────
 export async function uploadBoardImage(
   userId:   string,
   boardId:  string,

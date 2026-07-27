@@ -1,219 +1,113 @@
 /**
  * trackersDbService.ts
  *
- * All 6 trackers stored in Firestore (same cloud-synced pattern as journaling/fits).
+ * Now backed by the app's own API (MongoDB) via /api/data/trackers_* instead
+ * of Firestore. Exported names/signatures are unchanged so screens don't need
+ * edits. `userId` params are ignored — the backend scopes by the JWT.
  *
- * Collections:
- *   trackers_mood/{id}
- *   trackers_sleep/{id}
- *   trackers_habits/{id}
- *   trackers_habit_logs/{id}
- *   trackers_period/{id}
- *   trackers_health/{id}
- *   trackers_expenses/{id}
- *   trackers_milestones/{id}
+ * Collections: trackers_mood / sleep / habits / habit_logs / period / health /
+ *              expenses / milestones
  */
-import {
-  collection, doc, addDoc, getDocs, updateDoc,
-  deleteDoc, query, where, orderBy, limit,
-  setDoc, serverTimestamp, Timestamp,
-} from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { listDocs, createDoc, patchDoc, removeDoc, upsertDoc } from '../../../services/dataApi';
 import {
   MoodEntry, SleepEntry, Habit, HabitLog,
   PeriodEntry, HealthEntry, ExpenseEntry, Milestone,
 } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const toIso = (ts: any): string => {
-  if (!ts) return new Date().toISOString();
-  if (ts instanceof Timestamp) return ts.toDate().toISOString();
-  return typeof ts === 'string' ? ts : new Date().toISOString();
+const sinceDate = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().split('T')[0];
 };
-
-const snapshotTo = <T>(snap: any, extra?: Partial<T>): T =>
-  ({ id: snap.id, ...snap.data(), ...extra } as T);
+const descBy = (field: string) => (a: any, b: any) => String(b[field] ?? '').localeCompare(String(a[field] ?? ''));
+const ascBy = (field: string) => (a: any, b: any) => String(a[field] ?? '').localeCompare(String(b[field] ?? ''));
 
 // ── MOOD ──────────────────────────────────────────────────────────────────────
-export async function fetchMoodEntries(userId: string, days = 90): Promise<MoodEntry[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const q = query(
-    collection(db, 'trackers_mood'),
-    where('userId', '==', userId),
-    where('date', '>=', since.toISOString().split('T')[0]),
-    orderBy('date', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<MoodEntry>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchMoodEntries(_userId: string, days = 90): Promise<MoodEntry[]> {
+  const since = sinceDate(days);
+  const all = await listDocs<MoodEntry>('trackers_mood');
+  return all.filter(e => ((e as any).date ?? '') >= since).sort(descBy('date'));
 }
-
 export async function saveMoodEntry(entry: Omit<MoodEntry, 'id' | 'createdAt'>): Promise<MoodEntry> {
-  // one entry per day — use userId_date as doc ID
-  const docId = `${entry.userId}_${entry.date}`;
-  await setDoc(doc(db, 'trackers_mood', docId), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  }, { merge: true });
-  return { id: docId, ...entry, createdAt: new Date().toISOString() };
+  return upsertDoc<MoodEntry>('trackers_mood', { date: (entry as any).date }, entry);
 }
 
 // ── SLEEP ─────────────────────────────────────────────────────────────────────
-export async function fetchSleepEntries(userId: string, days = 30): Promise<SleepEntry[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const q = query(
-    collection(db, 'trackers_sleep'),
-    where('userId', '==', userId),
-    where('date', '>=', since.toISOString().split('T')[0]),
-    orderBy('date', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<SleepEntry>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchSleepEntries(_userId: string, days = 30): Promise<SleepEntry[]> {
+  const since = sinceDate(days);
+  const all = await listDocs<SleepEntry>('trackers_sleep');
+  return all.filter(e => ((e as any).date ?? '') >= since).sort(descBy('date'));
 }
-
 export async function saveSleepEntry(entry: Omit<SleepEntry, 'id' | 'createdAt'>): Promise<SleepEntry> {
-  const docId = `${entry.userId}_${entry.date}`;
-  await setDoc(doc(db, 'trackers_sleep', docId), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  }, { merge: true });
-  return { id: docId, ...entry, createdAt: new Date().toISOString() };
+  return upsertDoc<SleepEntry>('trackers_sleep', { date: (entry as any).date }, entry);
 }
 
 // ── HABITS ────────────────────────────────────────────────────────────────────
-export async function fetchHabits(userId: string): Promise<Habit[]> {
-  const q = query(
-    collection(db, 'trackers_habits'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'asc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<Habit>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchHabits(_userId: string): Promise<Habit[]> {
+  const all = await listDocs<Habit>('trackers_habits');
+  return all.sort(ascBy('createdAt'));
 }
-
 export async function createHabit(habit: Omit<Habit, 'id' | 'createdAt' | 'streak'>): Promise<Habit> {
-  const ref = await addDoc(collection(db, 'trackers_habits'), {
-    ...habit,
-    streak:    0,
-    createdAt: serverTimestamp(),
-  });
-  return { id: ref.id, ...habit, streak: 0, createdAt: new Date().toISOString() };
+  return createDoc<Habit>('trackers_habits', { ...habit, streak: 0 });
 }
-
 export async function updateHabitStreak(habitId: string, streak: number): Promise<void> {
-  await updateDoc(doc(db, 'trackers_habits', habitId), { streak });
+  await patchDoc('trackers_habits', habitId, { streak });
 }
-
 export async function deleteHabitById(habitId: string): Promise<void> {
-  await deleteDoc(doc(db, 'trackers_habits', habitId));
+  await removeDoc('trackers_habits', habitId);
 }
 
-export async function fetchHabitLogs(userId: string, days = 30): Promise<HabitLog[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const q = query(
-    collection(db, 'trackers_habit_logs'),
-    where('userId', '==', userId),
-    where('date', '>=', since.toISOString().split('T')[0]),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<HabitLog>(d));
+export async function fetchHabitLogs(_userId: string, days = 30): Promise<HabitLog[]> {
+  const since = sinceDate(days);
+  const all = await listDocs<HabitLog>('trackers_habit_logs');
+  return all.filter(e => ((e as any).date ?? '') >= since);
 }
-
 export async function toggleHabitLogEntry(log: HabitLog): Promise<HabitLog> {
-  const docId = `${log.userId}_${log.habitId}_${log.date}`;
-  await setDoc(doc(db, 'trackers_habit_logs', docId), log, { merge: true });
-  return { ...log, id: docId };
+  return upsertDoc<HabitLog>('trackers_habit_logs', { habitId: log.habitId, date: (log as any).date }, log);
 }
 
 // ── PERIOD ────────────────────────────────────────────────────────────────────
-export async function fetchPeriodEntries(userId: string): Promise<PeriodEntry[]> {
-  const q = query(
-    collection(db, 'trackers_period'),
-    where('userId', '==', userId),
-    orderBy('startDate', 'desc'),
-    limit(24),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<PeriodEntry>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchPeriodEntries(_userId: string): Promise<PeriodEntry[]> {
+  const all = await listDocs<PeriodEntry>('trackers_period');
+  return all.sort(descBy('startDate')).slice(0, 24);
 }
-
 export async function savePeriodEntry(entry: Omit<PeriodEntry, 'id' | 'createdAt'>): Promise<PeriodEntry> {
-  const ref = await addDoc(collection(db, 'trackers_period'), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  });
-  return { id: ref.id, ...entry, createdAt: new Date().toISOString() };
+  return createDoc<PeriodEntry>('trackers_period', entry);
 }
-
 export async function updatePeriodEntry(id: string, updates: Partial<PeriodEntry>): Promise<void> {
-  await updateDoc(doc(db, 'trackers_period', id), updates);
+  await patchDoc('trackers_period', id, updates);
 }
 
 // ── HEALTH ────────────────────────────────────────────────────────────────────
-export async function fetchHealthEntries(userId: string, days = 30): Promise<HealthEntry[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const q = query(
-    collection(db, 'trackers_health'),
-    where('userId', '==', userId),
-    where('date', '>=', since.toISOString().split('T')[0]),
-    orderBy('date', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<HealthEntry>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchHealthEntries(_userId: string, days = 30): Promise<HealthEntry[]> {
+  const since = sinceDate(days);
+  const all = await listDocs<HealthEntry>('trackers_health');
+  return all.filter(e => ((e as any).date ?? '') >= since).sort(descBy('date'));
 }
-
 export async function saveHealthEntry(entry: Omit<HealthEntry, 'id' | 'createdAt'>): Promise<HealthEntry> {
-  const docId = `${entry.userId}_${entry.date}`;
-  await setDoc(doc(db, 'trackers_health', docId), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  }, { merge: true });
-  return { id: docId, ...entry, createdAt: new Date().toISOString() };
+  return upsertDoc<HealthEntry>('trackers_health', { date: (entry as any).date }, entry);
 }
 
 // ── EXPENSES ──────────────────────────────────────────────────────────────────
-export async function fetchExpenseEntries(userId: string, days = 30): Promise<ExpenseEntry[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const q = query(
-    collection(db, 'trackers_expenses'),
-    where('userId', '==', userId),
-    where('date', '>=', since.toISOString().split('T')[0]),
-    orderBy('date', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<ExpenseEntry>(d, { createdAt: toIso(d.data().createdAt) }));
+export async function fetchExpenseEntries(_userId: string, days = 30): Promise<ExpenseEntry[]> {
+  const since = sinceDate(days);
+  const all = await listDocs<ExpenseEntry>('trackers_expenses');
+  return all.filter(e => ((e as any).date ?? '') >= since).sort(descBy('date'));
 }
-
 export async function saveExpenseEntry(entry: Omit<ExpenseEntry, 'id' | 'createdAt'>): Promise<ExpenseEntry> {
-  const ref = await addDoc(collection(db, 'trackers_expenses'), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  });
-  return { id: ref.id, ...entry, createdAt: new Date().toISOString() };
+  return createDoc<ExpenseEntry>('trackers_expenses', entry);
 }
-
 export async function deleteExpenseById(id: string): Promise<void> {
-  await deleteDoc(doc(db, 'trackers_expenses', id));
+  await removeDoc('trackers_expenses', id);
 }
 
 // ── MILESTONES ────────────────────────────────────────────────────────────────
-export async function fetchMilestones(userId: string): Promise<Milestone[]> {
-  const q = query(
-    collection(db, 'trackers_milestones'),
-    where('userId', '==', userId),
-    orderBy('earnedAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => snapshotTo<Milestone>(d));
+export async function fetchMilestones(_userId: string): Promise<Milestone[]> {
+  const all = await listDocs<Milestone>('trackers_milestones');
+  return all.sort(descBy('earnedAt'));
 }
-
 export async function awardMilestone(milestone: Omit<Milestone, 'id'>): Promise<Milestone> {
-  // Idempotent — same type can only be awarded once
-  const docId = `${milestone.userId}_${milestone.type}`;
-  await setDoc(doc(db, 'trackers_milestones', docId), milestone, { merge: true });
-  return { id: docId, ...milestone };
+  // Idempotent — same type only once per user.
+  return upsertDoc<Milestone>('trackers_milestones', { type: (milestone as any).type }, milestone);
 }

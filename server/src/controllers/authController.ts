@@ -5,6 +5,7 @@ import { UserModel } from '../models/User';
 import { OtpModel } from '../models/Otp';
 import { signSessionToken } from '../utils/jwt';
 import { sendSms } from '../services/snsService';
+import { sendOtpSms as sendOtpViaMsg91 } from '../services/msg91Service';
 import { env } from '../config/env';
 import { verifySchema, updateProfileSchema, sendOtpSchema, verifyOtpSchema } from '../validators/authValidators';
 import { AppError } from '../utils/AppError';
@@ -27,7 +28,12 @@ export async function sendOtp(req: Request, res: Response) {
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
 
-  await sendSms(phone, `Your Super Bae verification code is ${code}. It expires in ${env.otpTtlMinutes} minutes.`);
+  // Prefer MSG91 (handles India DLT) when configured; else fall back to AWS SNS.
+  if (env.msg91AuthKey) {
+    await sendOtpViaMsg91(phone, code);
+  } else {
+    await sendSms(phone, `Your Super Bae verification code is ${code}. It expires in ${env.otpTtlMinutes} minutes.`);
+  }
   res.json({ ok: true });
 }
 

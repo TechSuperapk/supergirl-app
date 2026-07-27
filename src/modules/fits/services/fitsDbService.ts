@@ -1,54 +1,33 @@
 /**
  * fitsDbService.ts
  *
- * Wardrobe, outfits, and planner stored in Firestore
- * (same pattern as journaling — cloud-synced, offline-first via Firestore cache).
+ * Now backed by the app's own API (MongoDB) via /api/data/fits_* instead of
+ * Firestore. Images upload to S3 (via storageService). Exported names/
+ * signatures are unchanged so screens don't need edits.
  *
- * Collections:
- *   fits_wardrobe/{itemId}
- *   fits_outfits/{outfitId}
- *   fits_planner/{userId_date}
+ * Collections: fits_wardrobe / fits_outfits / fits_planner
  */
-import {
-  collection, doc, addDoc, getDoc, getDocs, updateDoc,
-  deleteDoc, query, where, orderBy, setDoc,
-  serverTimestamp, Timestamp,
-} from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { listDocs, createDoc, patchDoc, removeDoc, upsertDoc } from '../../../services/dataApi';
 import { uploadFileToFirebase } from '../../../services/storageService';
 import { ClothingItem, Outfit, PlannerEntry } from '../types';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function toIso(ts: any): string {
-  if (!ts) return new Date().toISOString();
-  if (ts instanceof Timestamp) return ts.toDate().toISOString();
-  return typeof ts === 'string' ? ts : new Date().toISOString();
-}
+const descByCreated = (a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''));
 
-// ── Upload clothing image ─────────────────────────────────────────────────────
+// ── Upload clothing image (S3) ────────────────────────────────────────────────
 export async function uploadClothingImage(
   userId: string,
   localUri: string,
 ): Promise<{ remoteUrl: string; s3Key: string }> {
-  const ext     = localUri.split('.').pop() ?? 'jpg';
-  const s3Key   = `fits/${userId}/wardrobe/${Date.now()}.${ext}`;
+  const ext       = localUri.split('.').pop() ?? 'jpg';
+  const s3Key     = `fits/${userId}/wardrobe/${Date.now()}.${ext}`;
   const remoteUrl = await uploadFileToFirebase(localUri, s3Key);
   return { remoteUrl, s3Key };
 }
 
 // ── Wardrobe ──────────────────────────────────────────────────────────────────
-export async function fetchWardrobe(userId: string): Promise<ClothingItem[]> {
-  const q    = query(
-    collection(db, 'fits_wardrobe'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({
-    ...(d.data() as ClothingItem),
-    id: d.id,
-    createdAt: toIso((d.data() as any).createdAt),
-  }));
+export async function fetchWardrobe(_userId: string): Promise<ClothingItem[]> {
+  const all = await listDocs<ClothingItem>('fits_wardrobe');
+  return all.sort(descByCreated);
 }
 
 export async function addClothingItem(
@@ -57,26 +36,12 @@ export async function addClothingItem(
 ): Promise<ClothingItem> {
   let imageUri = item.imageUri;
   let s3Key    = item.s3Key;
-
   if (localImageUri && !localImageUri.startsWith('http')) {
     const uploaded = await uploadClothingImage(item.userId, localImageUri);
     imageUri = uploaded.remoteUrl;
     s3Key    = uploaded.s3Key;
   }
-
-  const ref  = await addDoc(collection(db, 'fits_wardrobe'), {
-    ...item,
-    imageUri,
-    s3Key,
-    createdAt: serverTimestamp(),
-  });
-  return {
-    ...item,
-    id:        ref.id,
-    imageUri,
-    s3Key,
-    createdAt: new Date().toISOString(),
-  };
+  return createDoc<ClothingItem>('fits_wardrobe', { ...item, imageUri, s3Key });
 }
 
 export async function updateClothingItem(
@@ -84,83 +49,49 @@ export async function updateClothingItem(
   updates: Partial<ClothingItem>,
   newLocalUri?: string,
 ): Promise<Partial<ClothingItem>> {
-  let patch = { ...updates };
+  const patch = { ...updates };
   if (newLocalUri && !newLocalUri.startsWith('http')) {
     const uploaded = await uploadClothingImage(updates.userId ?? '', newLocalUri);
     patch.imageUri = uploaded.remoteUrl;
     patch.s3Key    = uploaded.s3Key;
   }
-  await updateDoc(doc(db, 'fits_wardrobe', itemId), patch);
+  await patchDoc('fits_wardrobe', itemId, patch);
   return patch;
 }
 
 export async function deleteClothingItem(itemId: string): Promise<void> {
-  await deleteDoc(doc(db, 'fits_wardrobe', itemId));
+  await removeDoc('fits_wardrobe', itemId);
 }
 
 // ── Outfits ───────────────────────────────────────────────────────────────────
-export async function fetchOutfits(userId: string): Promise<Outfit[]> {
-  const q    = query(
-    collection(db, 'fits_outfits'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({
-    ...(d.data() as Outfit),
-    id: d.id,
-    createdAt: toIso((d.data() as any).createdAt),
-  }));
+export async function fetchOutfits(_userId: string): Promise<Outfit[]> {
+  const all = await listDocs<Outfit>('fits_outfits');
+  return all.sort(descByCreated);
 }
 
-export async function saveOutfit(
-  outfit: Omit<Outfit, 'id' | 'createdAt'>,
-): Promise<Outfit> {
-  const ref = await addDoc(collection(db, 'fits_outfits'), {
-    ...outfit,
-    createdAt: serverTimestamp(),
-  });
-  return { ...outfit, id: ref.id, createdAt: new Date().toISOString() };
+export async function saveOutfit(outfit: Omit<Outfit, 'id' | 'createdAt'>): Promise<Outfit> {
+  return createDoc<Outfit>('fits_outfits', outfit);
 }
 
-export async function updateOutfit(
-  outfitId: string,
-  updates: Partial<Outfit>,
-): Promise<void> {
-  await updateDoc(doc(db, 'fits_outfits', outfitId), updates);
+export async function updateOutfit(outfitId: string, updates: Partial<Outfit>): Promise<void> {
+  await patchDoc('fits_outfits', outfitId, updates);
 }
 
 export async function deleteOutfit(outfitId: string): Promise<void> {
-  await deleteDoc(doc(db, 'fits_outfits', outfitId));
+  await removeDoc('fits_outfits', outfitId);
 }
 
-// ── Planner ───────────────────────────────────────────────────────────────────
-/** Document ID = `{userId}_{YYYY-MM-DD}` */
-export async function fetchPlannerEntries(userId: string): Promise<PlannerEntry[]> {
-  const q    = query(
-    collection(db, 'fits_planner'),
-    where('userId', '==', userId),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.data() as PlannerEntry);
+// ── Planner (one entry per date) ──────────────────────────────────────────────
+export async function fetchPlannerEntries(_userId: string): Promise<PlannerEntry[]> {
+  return listDocs<PlannerEntry>('fits_planner');
 }
 
-export async function upsertPlannerEntry(
-  userId: string,
-  entry: PlannerEntry,
-): Promise<void> {
-  const docId = `${userId}_${entry.date}`;
-  await setDoc(
-    doc(db, 'fits_planner', docId),
-    { ...entry, userId },
-    { merge: true },
-  );
+export async function upsertPlannerEntry(_userId: string, entry: PlannerEntry): Promise<void> {
+  await upsertDoc('fits_planner', { date: (entry as any).date }, entry);
 }
 
-export async function deletePlannerEntry(
-  userId: string,
-  date: string,
-): Promise<void> {
-  const docId = `${userId}_${date}`;
-  await deleteDoc(doc(db, 'fits_planner', docId));
+export async function deletePlannerEntry(_userId: string, date: string): Promise<void> {
+  const all = await listDocs<PlannerEntry & { id: string }>('fits_planner');
+  const match = all.find(e => (e as any).date === date);
+  if (match?.id) await removeDoc('fits_planner', match.id);
 }

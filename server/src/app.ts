@@ -11,6 +11,8 @@ import { aiRoutes } from './routes/aiRoutes';
 import { weatherRoutes } from './routes/weatherRoutes';
 import { paymentRoutes } from './routes/paymentRoutes';
 import { mediaRoutes } from './routes/mediaRoutes';
+import { dataRoutes } from './routes/dataRoutes';
+import { clubRoutes } from './routes/clubRoutes';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const MONGO_STATES: Record<number, string> = {
@@ -56,6 +58,10 @@ export function createApp() {
   app.use('/api/payments', paymentRoutes);
   // S3 media uploads (presigned URLs) — replaces Firebase Storage.
   app.use('/api/media', mediaRoutes);
+  // Generic owner-scoped collections (boards, trackers_*, fits_*) — replaces Firestore.
+  app.use('/api/data', dataRoutes);
+  // Club (posts, comments, events, tickets, groups, communities) — replaces Firestore.
+  app.use('/api/club', clubRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

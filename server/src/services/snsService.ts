@@ -14,6 +14,14 @@ export async function sendSms(phone: string, message: string): Promise<void> {
   if (env.snsSenderId) {
     attrs['AWS.SNS.SMS.SenderID'] = { DataType: 'String', StringValue: env.snsSenderId };
   }
+  // India DLT (TRAI) — attach the registered Entity ID + Template ID so the
+  // message passes carrier filtering for Indian numbers.
+  if (env.snsEntityId) {
+    attrs['AWS.MM.SMS.EntityId'] = { DataType: 'String', StringValue: env.snsEntityId };
+  }
+  if (env.snsTemplateId) {
+    attrs['AWS.MM.SMS.TemplateId'] = { DataType: 'String', StringValue: env.snsTemplateId };
+  }
   await sns.send(new PublishCommand({
     PhoneNumber: phone,
     Message: message,
