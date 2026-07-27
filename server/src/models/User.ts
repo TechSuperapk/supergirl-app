@@ -9,6 +9,9 @@ export interface IUser {
   avatarUrl?: string;
   bio?: string;
   isVerified: boolean;
+  subscriptionTier?: 'free' | 'premium';
+  subscriptionExpiry?: string | null;
+  notificationPrefs?: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +25,11 @@ const UserSchema = new Schema<IUser>(
     avatarUrl:   { type: String },
     bio:         { type: String },
     isVerified:  { type: Boolean, default: true },
+    subscriptionTier:   { type: String, enum: ['free', 'premium'], default: 'free' },
+    subscriptionExpiry: { type: String, default: null },
+    notificationPrefs:  { type: Schema.Types.Mixed },
+    expoPushToken:      { type: String },
+    pushPlatform:       { type: String },
   },
   {
     timestamps: { currentTime: () => new Date() },

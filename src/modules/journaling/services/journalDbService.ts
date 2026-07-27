@@ -1,15 +1,5 @@
-import {
-  doc,
-  setDoc,
-  deleteDoc,
-  getDoc,
-  collection,
-  query,
-  where,
-  onSnapshot,
-} from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
 import { apiClient } from '../../../services/apiClient';
+import { listDocs, upsertDoc, removeDoc } from '../../../services/dataApi';
 import { JournalEntry } from '../types';
 
 // ── Journal entries — now backed by the Express + MongoDB API ──────────────
@@ -71,51 +61,63 @@ export function subscribeToJournalEntries(
   return () => { stopped = true; clearInterval(timer); };
 }
 
-// ── Vault (private-journal PIN) + Drafts — unchanged, still Firestore ──────
-// Out of scope for the entries-CRUD migration: these aren't part of the
-// "journal entries" API and touching the PIN/security-question flow isn't
-// something to migrate opportunistically alongside it.
+// ── Vault (private-journal PIN) + Drafts — now on the backend (MongoDB) via
+// the generic /api/data collections. Polling replaces the old Firestore
+// onSnapshot listeners (same unsubscribe-fn contract). ──
 
 // Fields hold hashes only (see utils/vaultCrypto.ts), never raw PIN/answers.
 export interface VaultData { pinHash?: string; q1?: string; a1Hash?: string; q2?: string; a2Hash?: string; }
 
-export async function saveVaultData(userId: string, data: VaultData) {
-  const ref = doc(db, 'vaults', userId);
-  await setDoc(ref, { ...data, userId, updatedAt: new Date().toISOString() }, { merge: true });
+export async function saveVaultData(_userId: string, data: VaultData) {
+  // One vault doc per user (backend scopes by JWT; empty match = the user's doc).
+  await upsertDoc('vaults', {}, data);
 }
 
 export function subscribeToVault(
-  userId: string,
+  _userId: string,
   onUpdate: (data: VaultData | null) => void,
   onError?: (error: any) => void,
+  intervalMs = 20000,
 ) {
-  const ref = doc(db, 'vaults', userId);
-  return onSnapshot(
-    ref,
-    (snap) => onUpdate(snap.exists() ? (snap.data() as VaultData) : null),
-    (error) => { console.error('subscribeToVault failed:', error); onError?.(error); },
-  );
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    try { const list = await listDocs<VaultData>('vaults'); if (!stopped) onUpdate(list[0] ?? null); }
+    catch (e) { if (!stopped) onError?.(e); }
+  };
+  void tick();
+  const timer = setInterval(tick, intervalMs);
+  return () => { stopped = true; clearInterval(timer); };
 }
 
-export async function saveDraftToFirestore(userId: string, entry: JournalEntry) {
-  const ref = doc(db, 'journal_drafts', entry.id);
-  await setDoc(ref, { ...entry, userId, updatedAt: new Date().toISOString() });
+export async function saveDraftToFirestore(_userId: string, entry: JournalEntry) {
+  await upsertDoc('journal_drafts', { clientKey: entry.id }, { ...entry, clientKey: entry.id });
 }
 
 export async function deleteDraftFromFirestore(draftId: string) {
-  await deleteDoc(doc(db, 'journal_drafts', draftId));
+  const list = await listDocs<any>('journal_drafts');
+  const m = list.find(d => d.clientKey === draftId || d.id === draftId);
+  if (m?.id) await removeDoc('journal_drafts', m.id);
 }
 
 export function subscribeToDrafts(
-  userId: string,
+  _userId: string,
   onUpdate: (drafts: JournalEntry[]) => void,
   onError?: (error: any) => void,
+  intervalMs = 20000,
 ) {
-  const q = query(collection(db, 'journal_drafts'), where('userId', '==', userId));
-  return onSnapshot(q, (snapshot) => {
-    const drafts: JournalEntry[] = [];
-    snapshot.forEach((d) => drafts.push(d.data() as JournalEntry));
-    drafts.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-    onUpdate(drafts);
-  }, (error) => { if (onError) onError(error); });
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const list = await listDocs<any>('journal_drafts');
+      const drafts = list
+        .map(d => ({ ...d, id: d.clientKey ?? d.id }))
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)) as JournalEntry[];
+      if (!stopped) onUpdate(drafts);
+    } catch (e) { if (!stopped) onError?.(e); }
+  };
+  void tick();
+  const timer = setInterval(tick, intervalMs);
+  return () => { stopped = true; clearInterval(timer); };
 }

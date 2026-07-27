@@ -19,5 +19,12 @@ export const verifyOtpSchema = z.object({
 export const updateProfileSchema = z.object({
   name: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(500).optional(),
-  avatarUrl: z.string().url().optional(),
+  avatarUrl: z.string().optional(),
+  countryCode: z.string().max(6).optional(),
+  phone: z.string().max(20).optional(),
+  subscriptionTier: z.enum(['free', 'premium']).optional(),
+  subscriptionExpiry: z.string().nullable().optional(),
+  notificationPrefs: z.record(z.boolean()).optional(),
+  expoPushToken: z.string().optional(),
+  pushPlatform: z.string().max(20).optional(),
 });

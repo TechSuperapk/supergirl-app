@@ -25,7 +25,9 @@ import {
 import { Post, Event, Group, Draft } from '../types';
 import { mergeDefaultCommunities } from '../defaultCommunities';
 import { SAMPLE_EVENTS } from '../sampleEvents';
-import { DocumentSnapshot } from 'firebase/firestore';
+// Feed pagination cursors are now opaque strings from the backend (was a
+// Firestore DocumentSnapshot).
+type DocumentSnapshot = string;
 
 // ── Feed hook ─────────────────────────────────────────────────────────────────
 export function useClubFeed() {

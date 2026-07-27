@@ -9,7 +9,6 @@ import { loginSuccess }   from '../store/authSlice';
 import { sendOtp, verifyOtp } from '../services/authService';
 import { exchangeFirebaseTokenForSession } from '../services/backendAuthService';
 import DropdownIcon from '../../../../assets/DropdownIcon';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 const F  = 'DMSans-Regular';
 const FB = 'DMSans-Bold';
@@ -43,7 +42,7 @@ export function LoginScreen({ onLogin }: Props) {
   // auto-verification). Idempotent via `completingRef` so the auto path
   // racing a manual verify can't run the backend exchange twice.
   const completingRef = useRef(false);
-  const completeSignIn = useCallback(async (fbUser: FirebaseAuthTypes.User) => {
+  const completeSignIn = useCallback(async (fbUser: any) => {
     if (completingRef.current) return;
     completingRef.current = true;
     setLoading(true);

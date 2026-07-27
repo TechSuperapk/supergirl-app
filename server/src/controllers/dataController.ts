@@ -7,6 +7,7 @@ import { AppError } from '../utils/AppError';
 // rules and get their own controllers.
 const ALLOWED = new Set<string>([
   'boards',
+  'vaults', 'journal_drafts', 'subscriptions', 'journal_backups',
   'trackers_mood', 'trackers_sleep', 'trackers_habits', 'trackers_habit_logs',
   'trackers_period', 'trackers_health', 'trackers_expenses', 'trackers_milestones',
   'fits_wardrobe', 'fits_outfits', 'fits_planner', 'fits_trips',

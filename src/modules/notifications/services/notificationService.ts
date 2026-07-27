@@ -14,8 +14,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { apiClient } from '../../../services/apiClient';
 import { AppNotification, NotificationType } from '../store/notificationsSlice';
 
 // ── Configure foreground behaviour ────────────────────────────────────────────
@@ -80,15 +79,11 @@ export async function registerForPushNotifications(
 
   const token = tokenData.data;
 
-  // Persist to Firestore
+  // Persist the push token to the backend (best-effort).
   try {
-    await updateDoc(doc(db, 'users', userId), {
-      expoPushToken: token,
-      pushPlatform: Platform.OS,
-      updatedAt: new Date().toISOString(),
-    });
+    await apiClient.patch('/auth/me', { expoPushToken: token, pushPlatform: Platform.OS });
   } catch (err) {
-    console.warn('[FCM] Could not persist push token:', err);
+    console.warn('[push] Could not persist push token:', err);
   }
 
   return token;

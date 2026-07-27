@@ -11,8 +11,7 @@ import { RootState }            from '../../../store';
 import { logout }               from '../../auth/store/authSlice';
 import { loadEntries }          from '../../journaling/store/journalSlice';
 import { saveBackup, getBestBackup, pushRestoredToServer } from '../../journaling/services/backupService';
-import { auth }                 from '../../../lib/firebase';
-import { signOut }              from 'firebase/auth';
+import { logoutBackendSession } from '../../auth/services/backendAuthService';
 
 import { ProfileHeader }        from '../components/ProfileHeader';
 import { SubscriptionCard }     from '../components/SubscriptionCard';
@@ -88,7 +87,7 @@ export function ProfileScreen({ navigation }: Props) {
       {
         text: 'Log out', style: 'destructive',
         onPress: async () => {
-          try { await signOut(auth); } catch {}
+          try { await logoutBackendSession(); } catch {}
           dispatch(logout());
           dispatch(loadEntries([]));
         },

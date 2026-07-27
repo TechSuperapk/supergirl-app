@@ -11,10 +11,9 @@
  * under the current UID so the realtime subscription keeps them in sync.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
 import { JournalEntry } from '../types';
 import { saveJournalEntry } from './journalDbService';
+import { listDocs, upsertDoc } from '../../../services/dataApi';
 
 const localKey = (phone: string) =>
   `superbae_backup_${(phone || 'guest').replace(/\D/g, '') || 'guest'}`;
@@ -37,7 +36,7 @@ export async function saveBackup(phone: string, uid: string, entries: JournalEnt
   } catch { /* ignore local write errors */ }
   try {
     if (isRealUid(uid)) {
-      await setDoc(doc(db, 'journal_backups', uid), { ...payload, uid, phone }, { merge: true });
+      await upsertDoc('journal_backups', {}, { ...payload, phone });
     }
   } catch { /* ignore server write errors (offline etc.) */ }
 }
@@ -55,10 +54,9 @@ export async function getLocalBackup(phone: string): Promise<BackupInfo | null> 
 export async function getServerBackup(uid: string): Promise<BackupInfo | null> {
   try {
     if (!isRealUid(uid)) return null;
-    const snap = await getDoc(doc(db, 'journal_backups', uid));
-    if (!snap.exists()) return null;
-    const p = snap.data() as any;
-    if (!Array.isArray(p.entries) || p.entries.length === 0) return null;
+    const list = await listDocs<any>('journal_backups');
+    const p = list[0];
+    if (!p || !Array.isArray(p.entries) || p.entries.length === 0) return null;
     return { entries: p.entries, savedAt: p.savedAt, count: p.count ?? p.entries.length, source: 'server' };
   } catch { return null; }
 }

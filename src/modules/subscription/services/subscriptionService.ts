@@ -12,8 +12,7 @@
  *       flow works in Expo Go / managed builds.
  */
 import { Platform, Alert, Linking } from 'react-native';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { listDocs, upsertDoc } from '../../../services/dataApi';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const YEARLY_PRICE_INR = 999;
@@ -38,28 +37,26 @@ function yearFromNow(): string {
   return d.toISOString();
 }
 
-/** Persist subscription record to Firestore */
+/** Persist subscription record to the backend (one per user). */
 async function persistSubscription(
-  uid:        string,
+  _uid:       string,
   provider:   SubscriptionProvider,
   expiresAt:  string,
   receiptData?: string,
 ): Promise<void> {
-  await setDoc(doc(db, 'subscriptions', uid), {
-    userId:       uid,
-    plan:         'yearly',
-    status:       'active',
-    provider,
-    expiresAt,
-    receiptData:  receiptData ?? null,
-    updatedAt:    new Date().toISOString(),
-  }, { merge: true });
+  await upsertDoc('subscriptions', {}, {
+    plan: 'yearly', status: 'active', provider, expiresAt, receiptData: receiptData ?? null,
+  });
 }
 
-/** Fetch existing subscription from Firestore */
-export async function fetchSubscription(uid: string) {
-  const snap = await getDoc(doc(db, 'subscriptions', uid));
-  return snap.exists() ? snap.data() : null;
+/** Fetch existing subscription from the backend. */
+export async function fetchSubscription(_uid: string) {
+  try {
+    const list = await listDocs<any>('subscriptions');
+    return list[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Check if subscription is still valid */
