@@ -46,23 +46,10 @@ let cachedAuth: AuthFactory | null | undefined;
  * so importing this file is always side-effect free.
  */
 function nativeAuth(): AuthFactory {
-  if (cachedAuth === undefined) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require('@react-native-firebase/auth');
-      cachedAuth = (mod?.default ?? mod) as AuthFactory;
-    } catch {
-      cachedAuth = null;
-    }
-  }
-  if (!cachedAuth) {
-    throw new Error(
-      'Phone sign-in needs a development build. Firebase Auth’s native module ' +
-      'isn’t available in Expo Go — run `npx expo run:android` / `run:ios` ' +
-      '(or install an EAS dev build) to sign in.',
-    );
-  }
-  return cachedAuth;
+  // Firebase phone auth has been removed — OTP now runs through the app's own
+  // backend (Amazon SNS). These legacy functions are no longer used; if
+  // anything calls them, fail loudly instead of touching Firebase.
+  throw new Error('Firebase phone auth has been removed. OTP now uses the backend.');
 }
 
 let confirmation: FirebaseAuthTypes.ConfirmationResult | null = null;

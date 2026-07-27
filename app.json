@@ -19,7 +19,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.supergirl.app",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "SuperGirl uses your camera to add photos to your journal, wardrobe, and boards.",
         "NSPhotoLibraryUsageDescription": "SuperGirl accesses your photos.",
@@ -36,7 +35,6 @@
         "backgroundColor": "#FDFAF7"
       },
       "package": "com.supergirl.app",
-      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,18 +54,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      "@react-native-firebase/crashlytics",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useFrameworks": "static"
-          }
-        }
-      ],
-      "./plugins/withRnfbNonModularFix",
       "expo-sqlite",
       "expo-secure-store",
       "expo-font",

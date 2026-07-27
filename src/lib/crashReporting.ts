@@ -19,18 +19,10 @@ type CrashlyticsModule = {
 let cached: CrashlyticsModule | null | undefined; // undefined = not tried yet
 
 function instance(): CrashlyticsModule | null {
-  if (cached !== undefined) return cached;
-  try {
-    // Lazy require so bundles running without the native module (Expo Go,
-    // stale dev client) never evaluate the throwing import path at startup.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('@react-native-firebase/crashlytics');
-    const factory = mod?.default ?? mod;
-    cached = typeof factory === 'function' ? factory() : null;
-  } catch {
-    cached = null; // native module not in this build — stay silent
-  }
-  return cached;
+  // Firebase Crashlytics has been removed (migrated off Firebase). Crash
+  // reporting is a no-op for now; a Sentry integration can replace it later.
+  // Keeping this function so the rest of the module's API is unchanged.
+  return null;
 }
 
 /** Record a caught, non-fatal JS error with an optional context tag. */
