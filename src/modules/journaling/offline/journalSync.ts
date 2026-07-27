@@ -31,7 +31,9 @@ const isRemote = (u: string) => /^https?:\/\//i.test(u);
 const hasLocalMedia = (e: JournalEntry) =>
   (e.mediaUrls ?? []).some(u => !isRemote(u)) ||
   (e.voiceNoteUrls ?? []).some(u => !isRemote(u)) ||
-  (!!e.voiceNoteUrl && !isRemote(e.voiceNoteUrl));
+  (!!e.voiceNoteUrl && !isRemote(e.voiceNoteUrl)) ||
+  // Inline images/audio placed by the freestyle editor live in contentBlocks.
+  (e.contentBlocks ?? []).some((b: any) => (b?.type === 'image' || b?.type === 'audio') && b?.uri && !isRemote(b.uri));
 
 async function uploadEntryMedia(u: string, entry: JournalEntry): Promise<JournalEntry> {
   const mediaUrls: string[] = [];
@@ -61,7 +63,24 @@ async function uploadEntryMedia(u: string, entry: JournalEntry): Promise<Journal
   const voiceNoteUrl = voiceNoteUrls?.length
     ? voiceNoteUrls[0]
     : entry.voiceNoteUrl ? await uploadVoice(entry.voiceNoteUrl) : entry.voiceNoteUrl;
-  return { ...entry, mediaUrls, voiceNoteUrl, voiceNoteUrls };
+
+  // Inline images/audio placed by the freestyle editor (contentBlocks) — swap
+  // each local file URI for its uploaded S3 URL.
+  let contentBlocks = entry.contentBlocks;
+  if (contentBlocks?.length) {
+    contentBlocks = await Promise.all(contentBlocks.map(async (b: any) => {
+      if ((b?.type === 'image' || b?.type === 'audio') && b?.uri && !isRemote(b.uri)) {
+        try {
+          const ext = b.uri.split('.').pop() || (b.type === 'audio' ? 'm4a' : 'jpg');
+          const path = `journal_media/${u}/${entry.id}/block_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+          return { ...b, uri: await uploadFileToFirebase(b.uri, path) };
+        } catch { return b; }
+      }
+      return b;
+    }));
+  }
+
+  return { ...entry, mediaUrls, voiceNoteUrl, voiceNoteUrls, contentBlocks };
 }
 
 async function isOnline(): Promise<boolean> {
