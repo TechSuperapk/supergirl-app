@@ -7,20 +7,20 @@
       "channel": "development",
       "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
     }
   }
 }

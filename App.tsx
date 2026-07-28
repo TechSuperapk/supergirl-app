@@ -15,6 +15,16 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { ErrorBoundary } from './src/shared/components/ErrorBoundary';
 import { initCrashReporting } from './src/lib/crashReporting';
+import * as Sentry from '@sentry/react-native';
+
+// Crash & error monitoring (replaces Firebase Crashlytics). The DSN comes from
+// the EXPO_PUBLIC_SENTRY_DSN env (set in eas.json). If it's absent, Sentry is
+// simply disabled — nothing breaks.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 0.2,
+});
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 initCrashReporting();
@@ -31,7 +41,7 @@ function InnerApp() {
   );
 }
 
-export default function App() {
+function App() {
   // Register the real STATIC weight files (not the variable font) so the weight
   // comes from the font face itself. A variable font registered under several
   // names + a numeric `fontWeight` renders differently on iOS vs Android
@@ -80,3 +90,6 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+// Sentry.wrap enables automatic crash + performance monitoring around the app.
+export default Sentry.wrap(App);

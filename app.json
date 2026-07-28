@@ -79,9 +79,12 @@
         {
           "microphonePermission": "Allow SuperGirl to use the microphone for voice-to-text.",
           "speechRecognitionPermission": "Allow SuperGirl to use speech recognition to transcribe your journal.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

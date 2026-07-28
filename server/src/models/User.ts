@@ -12,6 +12,8 @@ export interface IUser {
   subscriptionTier?: 'free' | 'premium';
   subscriptionExpiry?: string | null;
   notificationPrefs?: Record<string, boolean>;
+  expoPushToken?: string;
+  pushPlatform?: string;
   createdAt: string;
   updatedAt: string;
 }
