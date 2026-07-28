@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { verify, me, updateMe, sendOtp, verifyOtp } from '../controllers/authController';
+import { otpSendLimiter, otpVerifyLimiter } from '../middleware/rateLimit';
 
 export const authRoutes = Router();
 
-// Phone OTP via Amazon SNS (new, Firebase-free path).
-authRoutes.post('/otp/send', asyncHandler(sendOtp));
-authRoutes.post('/otp/verify', asyncHandler(verifyOtp));
+// Phone OTP — rate-limited (SMS sends cost money; verify is brute-forceable).
+authRoutes.post('/otp/send', otpSendLimiter, asyncHandler(sendOtp));
+authRoutes.post('/otp/verify', otpVerifyLimiter, asyncHandler(verifyOtp));
 
 // Legacy Firebase ID-token verify (kept during migration).
 authRoutes.post('/verify', asyncHandler(verify));

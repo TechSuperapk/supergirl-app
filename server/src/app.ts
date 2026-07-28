@@ -13,6 +13,7 @@ import { paymentRoutes } from './routes/paymentRoutes';
 import { mediaRoutes } from './routes/mediaRoutes';
 import { dataRoutes } from './routes/dataRoutes';
 import { clubRoutes } from './routes/clubRoutes';
+import { globalLimiter } from './middleware/rateLimit';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const MONGO_STATES: Record<number, string> = {
@@ -25,10 +26,15 @@ const MONGO_STATES: Record<number, string> = {
 export function createApp() {
   const app = express();
 
+  // Behind Nginx — trust the first proxy so req.ip is the real client IP
+  // (needed for rate limiting to be per-user, not per-proxy).
+  app.set('trust proxy', 1);
+
   app.use(helmet());
   app.use(cors({ origin: env.clientOrigin === '*' ? true : env.clientOrigin.split(',') }));
   app.use(express.json({ limit: '5mb' })); // journal bodies can carry a fair bit of rich text/structured data
   app.use(morgan(env.nodeEnv === 'development' ? 'dev' : 'combined'));
+  app.use(globalLimiter);
 
   app.get('/health', (_req, res) => res.json({ ok: true, env: env.nodeEnv }));
 
