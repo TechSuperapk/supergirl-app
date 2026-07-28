@@ -7,20 +7,20 @@
       "channel": "development",
       "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "https://58b248e85fd4205d89a934bf7d2d8874@o4511810686550016.ingest.de.sentry.io/4511810692644944" }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "ios": { "simulator": true },
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "https://58b248e85fd4205d89a934bf7d2d8874@o4511810686550016.ingest.de.sentry.io/4511810692644944" }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "" }
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://api.superbae.app/api", "EXPO_PUBLIC_SENTRY_DSN": "https://58b248e85fd4205d89a934bf7d2d8874@o4511810686550016.ingest.de.sentry.io/4511810692644944" }
     }
   }
 }
