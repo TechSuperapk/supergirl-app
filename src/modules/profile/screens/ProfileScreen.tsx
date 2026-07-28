@@ -12,6 +12,7 @@ import { logout }               from '../../auth/store/authSlice';
 import { loadEntries }          from '../../journaling/store/journalSlice';
 import { saveBackup, getBestBackup, pushRestoredToServer } from '../../journaling/services/backupService';
 import { logoutBackendSession } from '../../auth/services/backendAuthService';
+import * as Sentry from '@sentry/react-native';
 
 import { ProfileHeader }        from '../components/ProfileHeader';
 import { SubscriptionCard }     from '../components/SubscriptionCard';
@@ -79,6 +80,12 @@ export function ProfileScreen({ navigation }: Props) {
       { text: 'Restore saved journals', onPress: handleRestore },
       { text: 'Cancel', style: 'cancel' },
     ]);
+  };
+
+  // TEMPORARY — verify Sentry is reporting. Remove after confirming.
+  const handleTestSentry = () => {
+    Sentry.captureException(new Error('Sentry test event from Profile screen'));
+    Alert.alert('Sent to Sentry', 'A test error was sent. Check your Sentry dashboard in ~30 seconds.');
   };
 
   const handleLogout = () => {
@@ -240,6 +247,13 @@ export function ProfileScreen({ navigation }: Props) {
         {/* Danger zone */}
         <View style={[s.section, { marginTop: SECTION_GAP, marginBottom: Spacing['3xl'] }]}>
           <View style={s.sectionCard}>
+            {/* TEMPORARY test button — remove after confirming Sentry works. */}
+            <SettingsRow
+              type="press"
+              icon="🐞"
+              label="Test Sentry (dev)"
+              onPress={handleTestSentry}
+            />
             <SettingsRow
               type="press"
               icon="🚪"
