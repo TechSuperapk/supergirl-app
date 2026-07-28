@@ -54,6 +54,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "space-and-beauty-creations-pri",
+          "project": "react-native"
+        }
+      ],
       "expo-sqlite",
       "expo-secure-store",
       "expo-font",

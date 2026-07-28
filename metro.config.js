@@ -1,9 +1,11 @@
-const { getDefaultConfig } = require('expo/metro-config');
+// Sentry's Metro wrapper (getSentryExpoConfig) replaces getDefaultConfig so
+// source maps are generated + uploadable for readable crash stack traces.
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
-const defaultConfig = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
-// Enable .cjs extension support for Firebase JS SDK exports
-defaultConfig.resolver.sourceExts.push('cjs');
-defaultConfig.resolver.unstable_enablePackageExports = false;
+// Keep the existing resolver tweaks.
+config.resolver.sourceExts.push('cjs');
+config.resolver.unstable_enablePackageExports = false;
 
-module.exports = defaultConfig;
+module.exports = config;
