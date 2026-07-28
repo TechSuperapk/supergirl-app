@@ -1,0 +1,39 @@
+name: Deploy backend to EC2
+
+# Runs whenever backend code is pushed to master. It SSHes into the EC2 server,
+# force-syncs the repo, reinstalls deps, rebuilds, and restarts PM2 — the exact
+# steps we've been doing by hand. Secrets EC2_HOST / EC2_USER / EC2_SSH_KEY must
+# be set in the repo (Settings → Secrets and variables → Actions).
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch: {}   # lets you trigger a deploy manually from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/supergirl-app
+            git fetch origin master
+            # Force-sync to the pushed code (discards any local server edits like
+            # the sed hotfixes; .env + firebase-service-account.json are gitignored
+            # so they're never touched).
+            git reset --hard origin/master
+            cd server
+            npm install
+            npm run build
+            pm2 restart superbae-api
+            pm2 save
+            echo "Deploy complete."
