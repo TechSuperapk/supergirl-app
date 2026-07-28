@@ -3,19 +3,27 @@
  *
  * Handles:
  *  - Push permission request
- *  - Expo push token registration + Firestore persistence
+ *  - Expo push token registration + backend persistence (PATCH /auth/me)
  *  - Foreground notification handling
  *  - Notification tap navigation routing
  *  - Local notification scheduling (reminders)
  *
- * Uses expo-notifications (already available in Expo SDK 54).
- * For FCM data messages on Android, configure google-services.json.
+ * Uses expo-notifications (Expo SDK 54). Push is delivered via Expo's push
+ * service (no Firebase); the backend sends to the stored expoPushToken.
  */
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { apiClient } from '../../../services/apiClient';
 import { AppNotification, NotificationType } from '../store/notificationsSlice';
+
+// Expo push tokens are minted against the EAS project id (a UUID), read from
+// the build config so it stays in sync with app.json.
+const EAS_PROJECT_ID =
+  (Constants?.expoConfig as any)?.extra?.eas?.projectId ??
+  (Constants as any)?.easConfig?.projectId ??
+  '2031591f-c489-4740-8ff0-0e2efcd053ac';
 
 // ── Configure foreground behaviour ────────────────────────────────────────────
 Notifications.setNotificationHandler({
@@ -72,9 +80,9 @@ export async function registerForPushNotifications(
     });
   }
 
-  // Get Expo push token
+  // Get Expo push token (minted against the EAS project id).
   const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: 'super-bae', // matches your Firebase project ID — update if changed
+    projectId: EAS_PROJECT_ID,
   });
 
   const token = tokenData.data;

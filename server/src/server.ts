@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { connectDb } from './config/db';
 import { env } from './config/env';
 import { runOutfitOfTheDayBatch } from './jobs/outfitOfTheDay';
+import { seedCommunities } from './seed/communities';
 
 function scheduleOutfitOfTheDay() {
   if (!env.ootdCronEnabled) return;
@@ -24,6 +25,12 @@ function scheduleOutfitOfTheDay() {
 
 async function main() {
   await connectDb();
+  // Ensure the 12 default club communities exist (idempotent).
+  await seedCommunities()
+    // eslint-disable-next-line no-console
+    .then(r => console.log(`[seed] communities: +${r.inserted} inserted (${r.total} total)`))
+    // eslint-disable-next-line no-console
+    .catch(e => console.error('[seed] communities failed:', e?.message));
   const app = createApp();
   scheduleOutfitOfTheDay();
   app.listen(env.port, () => {

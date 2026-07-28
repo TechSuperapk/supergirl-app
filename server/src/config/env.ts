@@ -17,9 +17,6 @@ export const env = {
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '30d',
 
-  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
-  firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
-
   // ── AWS SNS phone OTP (replaces Firebase phone auth) ──────────────────────
   awsRegion:      process.env.AWS_REGION ?? 'ap-south-1',
   snsSenderId:    process.env.SNS_SENDER_ID ?? '',      // DLT-approved 6-char header (e.g. SUPBAE)

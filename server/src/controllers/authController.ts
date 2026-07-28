@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { verifyFirebaseIdToken } from '../config/firebaseAdmin';
 import { UserModel } from '../models/User';
 import { OtpModel } from '../models/Otp';
 import { signSessionToken } from '../utils/jwt';
 import { sendSms } from '../services/snsService';
 import { sendOtpSms as sendOtpViaMsg91 } from '../services/msg91Service';
 import { env } from '../config/env';
-import { verifySchema, updateProfileSchema, sendOtpSchema, verifyOtpSchema } from '../validators/authValidators';
+import { updateProfileSchema, sendOtpSchema, verifyOtpSchema } from '../validators/authValidators';
 import { AppError } from '../utils/AppError';
 
 const hashCode = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
@@ -71,36 +70,6 @@ export async function verifyOtp(req: Request, res: Response) {
   }
 
   const token = signSessionToken({ userId: user._id.toString(), uid: uidKey, phone });
-  res.json({ token, user: user.toJSON() });
-}
-
-/** POST /api/auth/verify
- *  Body: { idToken, name? }
- *  Client flow: sign in with Firebase Phone Auth (native or JS SDK) on-device,
- *  get the Firebase ID token, POST it here. We verify it server-side with
- *  Firebase Admin, upsert a Mongo User keyed by the Firebase uid, and return
- *  our own JWT session token for use on every other /api/* endpoint. */
-export async function verify(req: Request, res: Response) {
-  const { idToken, name } = verifySchema.parse(req.body);
-
-  const decoded = await verifyFirebaseIdToken(idToken).catch(() => {
-    throw new AppError(401, 'Invalid or expired Firebase ID token');
-  });
-
-  const phone = decoded.phone_number ?? '';
-  if (!decoded.uid) throw new AppError(401, 'Token missing uid');
-
-  let user = await UserModel.findOne({ firebaseUid: decoded.uid });
-  if (!user) {
-    user = await UserModel.create({
-      firebaseUid: decoded.uid,
-      phone,
-      name: name ?? '',
-      isVerified: true,
-    });
-  }
-
-  const token = signSessionToken({ userId: user._id.toString(), uid: decoded.uid, phone });
   res.json({ token, user: user.toJSON() });
 }
 
