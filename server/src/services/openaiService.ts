@@ -13,6 +13,9 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+// Generation is the slowest thing we call; this is a ceiling to stop a hung
+// request holding the invocation open, not a target.
+const OPENAI_TIMEOUT_MS = 25_000;
 
 // The controlled taxonomy the model must map every garment onto.
 const CATEGORIES = [
@@ -58,6 +61,7 @@ async function chat(messages: ChatMessage[], opts: { maxTokens?: number; jsonObj
         max_tokens: opts.maxTokens ?? 900,
         ...(opts.jsonObject ? { response_format: { type: 'json_object' } } : {}),
       }),
+      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
   } catch (e: any) {
     throw new AppError(502, `OpenAI request failed: ${e?.message ?? 'network error'}`);

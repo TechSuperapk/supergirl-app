@@ -12,8 +12,13 @@
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 
+// Background removal is image processing on the provider's side — slow by
+// nature. Downloading the source from S3 should be quick by comparison.
+const REMOVE_BG_TIMEOUT_MS = 25_000;
+const SOURCE_IMAGE_TIMEOUT_MS = 10_000;
+
 async function fetchImageBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(SOURCE_IMAGE_TIMEOUT_MS) });
   if (!res.ok) throw new AppError(400, `Could not fetch source image (${res.status})`);
   return Buffer.from(await res.arrayBuffer());
 }
@@ -28,6 +33,7 @@ async function viaRemoveBg(imageUrl: string): Promise<Buffer> {
     method: 'POST',
     headers: { 'X-Api-Key': env.removeBgApiKey, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form.toString(),
+    signal: AbortSignal.timeout(REMOVE_BG_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -46,6 +52,7 @@ async function viaClipDrop(imageUrl: string): Promise<Buffer> {
     method: 'POST',
     headers: { 'x-api-key': env.clipdropApiKey },
     body: form as any,
+    signal: AbortSignal.timeout(REMOVE_BG_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

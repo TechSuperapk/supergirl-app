@@ -6,6 +6,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 
 const BASE = 'https://api.openweathermap.org/data/2.5';
+const WEATHER_TIMEOUT_MS = 8_000;
 
 export interface CurrentWeather {
   city: string;
@@ -32,7 +33,9 @@ function bucketFor(tempC: number, condition: string): CurrentWeather['bucket'] {
 async function get(path: string, params: Record<string, string | number>): Promise<any> {
   if (!env.openWeatherApiKey) throw new AppError(503, 'Weather is not configured on the server');
   const qs = new URLSearchParams({ ...params, appid: env.openWeatherApiKey, units: 'metric' } as any);
-  const res = await fetch(`${BASE}/${path}?${qs.toString()}`);
+  const res = await fetch(`${BASE}/${path}?${qs.toString()}`, {
+    signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS),
+  });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new AppError(502, `Weather error ${res.status}: ${detail.slice(0, 200)}`);

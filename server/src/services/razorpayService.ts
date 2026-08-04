@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 
 const BASE = 'https://api.razorpay.com/v1';
+const RAZORPAY_TIMEOUT_MS = 10_000;
 
 function assertConfigured() {
   if (!env.razorpayKeyId || !env.razorpayKeySecret) {
@@ -36,6 +37,7 @@ export async function createOrder(amountPaise: number, receipt: string): Promise
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: authHeader() },
     body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, payment_capture: 1 }),
+    signal: AbortSignal.timeout(RAZORPAY_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
