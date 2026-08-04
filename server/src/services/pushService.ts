@@ -10,6 +10,7 @@
  */
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_TIMEOUT_MS = 10_000;
 
 export interface PushMessage {
   title: string;
@@ -53,6 +54,7 @@ export async function sendPush(
           'Accept-Encoding': 'gzip, deflate',
         },
         body: JSON.stringify(batch),
+        signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
       });
       const json: any = await resp.json().catch(() => ({}));
       const tickets: any[] = Array.isArray(json?.data) ? json.data : [];

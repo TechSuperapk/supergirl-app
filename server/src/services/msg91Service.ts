@@ -1,5 +1,7 @@
 import { env } from '../config/env';
 
+const MSG91_TIMEOUT_MS = 10_000;
+
 // Sends the OTP via MSG91's Flow API (v5). MSG91 handles India DLT, so no
 // AWS SNS registration is needed. Your MSG91 OTP template must contain one
 // variable (its name goes in MSG91_OTP_VAR, default "otp").
@@ -24,6 +26,7 @@ export async function sendOtpSms(phone: string, code: string): Promise<void> {
       accept: 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(MSG91_TIMEOUT_MS),
   });
 
   const json: any = await res.json().catch(() => ({}));

@@ -31,7 +31,11 @@ export function createApp() {
   app.set('trust proxy', 1);
 
   app.use(helmet());
-  app.use(cors({ origin: env.clientOrigin === '*' ? true : env.clientOrigin.split(',') }));
+  app.use(cors({
+    origin: env.clientOrigin === '*'
+      ? true
+      : env.clientOrigin.split(',').map(o => o.trim()).filter(Boolean),
+  }));
   app.use(express.json({ limit: '5mb' })); // journal bodies can carry a fair bit of rich text/structured data
   app.use(morgan(env.nodeEnv === 'development' ? 'dev' : 'combined'));
   app.use(globalLimiter);
@@ -41,6 +45,8 @@ export function createApp() {
   // Real DB connectivity check — separate from /health so a slow/broken
   // Mongo connection doesn't make the whole service look down, but you can
   // still tell definitively whether writes will actually reach the database.
+  // Unauthenticated, so it reports reachability only: the cluster host, the
+  // database name and raw driver errors go to the logs, not the response.
   app.get('/health/db', async (_req, res) => {
     const state = mongoose.connection.readyState;
     const label = MONGO_STATES[state] ?? 'unknown';
@@ -49,9 +55,11 @@ export function createApp() {
     }
     try {
       await mongoose.connection.db!.admin().ping();
-      res.json({ ok: true, mongo: label, host: mongoose.connection.host, name: mongoose.connection.name });
+      res.json({ ok: true, mongo: label });
     } catch (e: any) {
-      res.status(503).json({ ok: false, mongo: label, error: e?.message });
+      // eslint-disable-next-line no-console
+      console.error('[health/db] ping failed:', e?.message);
+      res.status(503).json({ ok: false, mongo: label });
     }
   });
 

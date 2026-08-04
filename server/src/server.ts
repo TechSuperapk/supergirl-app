@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { createApp } from './app';
-import { connectDb } from './config/db';
+import { ensureDb } from './config/db';
 import { env } from './config/env';
 import { runOutfitOfTheDayBatch } from './jobs/outfitOfTheDay';
 import { seedCommunities } from './seed/communities';
@@ -24,7 +24,7 @@ function scheduleOutfitOfTheDay() {
 }
 
 async function main() {
-  await connectDb();
+  await ensureDb();
   // Ensure the 12 default club communities exist (idempotent).
   await seedCommunities()
     // eslint-disable-next-line no-console
