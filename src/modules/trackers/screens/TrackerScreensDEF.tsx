@@ -1,3 +1,4 @@
+import { BackArrowIcon } from '../../../shared/components/AppBackButton';
 import React, { useState, useEffect } from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
@@ -70,7 +71,7 @@ export function HealthTrackerScreen({ navigation }: HealthProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Health" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Health" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.info} />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -157,7 +158,7 @@ export function ExpenseTrackerScreen({ navigation }: ExpenseProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Expenses" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Expenses" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.warning} />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -234,7 +235,7 @@ export function InsightsDashboardScreen({ navigation }: InsightsProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Insights" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Insights" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.trackers}
         rightIcon={<AppText style={{ fontSize: 20 }}>🔄</AppText>} onRightPress={generate} />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -266,7 +267,7 @@ export function MilestonesScreen({ navigation }: MilestonesProps) {
   const { milestones } = useMilestones();
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Milestones" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Milestones" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.premium} />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {milestones.length === 0 ? (
@@ -302,7 +303,7 @@ export function ProgressScreen({ navigation }: ProgressProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Progress" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Progress" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.trackers} />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 

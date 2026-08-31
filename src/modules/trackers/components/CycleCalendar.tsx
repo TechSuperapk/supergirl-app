@@ -1,4 +1,5 @@
 import React from 'react';
+import { useGridCellWidth } from '../../../shared/hooks/useGridCellWidth';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { AppText }       from '../../../shared/components/AppText';
 import { Colors }        from '../../../shared/theme/colors';
@@ -48,6 +49,8 @@ function getDayColor(
 }
 
 export function CycleCalendar({ entries, nextPeriod, onDayPress }: Props) {
+  // Whole-pixel columns — a %-width 7th cell wraps on Android.
+  const { onLayout: onGridLayout, cellWidth } = useGridCellWidth(7);
   // Build 35-day grid starting from Sunday of current week - 2 weeks
   const today  = new Date();
   const start  = new Date(today);
@@ -62,9 +65,9 @@ export function CycleCalendar({ entries, nextPeriod, onDayPress }: Props) {
   return (
     <View style={s.wrap}>
       {/* Day labels */}
-      <View style={s.headerRow}>
+      <View style={s.headerRow} onLayout={onGridLayout}>
         {DAY_LABELS.map((l, i) => (
-          <View key={i} style={s.cell}>
+          <View key={i} style={[s.cell, { width: cellWidth }]}>
             <AppText variant="caption" color={Colors.textMuted}>{l}</AppText>
           </View>
         ))}
@@ -79,7 +82,7 @@ export function CycleCalendar({ entries, nextPeriod, onDayPress }: Props) {
           return (
             <TouchableOpacity
               key={i}
-              style={[s.cell, s.dayCell, { backgroundColor: colors.bg }]}
+              style={[s.cell, s.dayCell, { width: cellWidth, backgroundColor: colors.bg }]}
               onPress={() => onDayPress(dateStr)}
               activeOpacity={0.7}
             >
@@ -120,7 +123,6 @@ const s = StyleSheet.create({
   headerRow:  { flexDirection: 'row' },
   grid:       { flexDirection: 'row', flexWrap: 'wrap' },
   cell: {
-    width:          `${100 / 7}%`,
     alignItems:     'center',
     justifyContent: 'center',
     paddingVertical: 2,

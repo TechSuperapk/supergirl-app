@@ -1,3 +1,4 @@
+import { BackArrowIcon } from '../../../shared/components/AppBackButton';
 import React, { useState } from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
@@ -63,7 +64,7 @@ export function MoodTrackerScreen({ navigation }: Props) {
     <SafeAreaView style={s.safe} edges={['top']}>
       <AppHeader
         title="Mood Tracker"
-        leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+        leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()}
         accentColor="#FF7043"
       />
