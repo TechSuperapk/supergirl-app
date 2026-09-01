@@ -5,6 +5,7 @@
  *
  * Exported from one file to keep the zip clean.
  */
+import { BackArrowIcon } from '../../../shared/components/AppBackButton';
 import React, { useState } from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
@@ -79,7 +80,7 @@ export function SleepTrackerScreen({ navigation }: SleepProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Sleep Tracker" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Sleep Tracker" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor="#7B1FA2" />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -152,7 +153,7 @@ export function HabitTrackerScreen({ navigation }: HabitProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Habits" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Habits" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor={Colors.trackers}
         rightIcon={<AppText style={{ fontSize: 26 }}>+</AppText>} onRightPress={() => setShowModal(true)} />
 
@@ -251,7 +252,7 @@ export function PeriodTrackerScreen({ navigation }: PeriodProps) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <AppHeader title="Period Tracker" leftIcon={<AppText variant="body" color={Colors.primary}>‹</AppText>}
+      <AppHeader title="Period Tracker" leftIcon={<BackArrowIcon />}
         onLeftPress={() => navigation.goBack()} accentColor="#E91E63" />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
